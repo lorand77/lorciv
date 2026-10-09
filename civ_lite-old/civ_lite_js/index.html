@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Civ Lite</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="setup-overlay">
+    <div id="setup-inner">
+        <div id="setup-title">Civ Lite — Player Setup</div>
+        <div id="setup-sep"></div>
+        <div id="setup-rows"></div>
+        <div id="setup-seed-row">
+            <label>Seed</label>
+            <input id="setup-seed-input" type="number">
+            <button onclick="document.getElementById('setup-seed-input').value = Math.floor(Math.random()*1000000)" style="font-size:11px;padding:2px 6px">Random</button>
+        </div>
+        <div id="setup-buttons">
+            <button id="setup-continue" class="hidden">Continue</button>
+            <button id="setup-import">Import save…</button>
+            <button id="setup-start">Start Game</button>
+        </div>
+    </div>
+</div>
+
+<canvas id="game-canvas"></canvas>
+
+<div id="scoreboard" class="hidden"></div>
+
+<div id="victory-overlay" class="hidden">
+    <div id="victory-inner">
+        <div id="victory-title">VICTORY!</div>
+        <div id="victory-subtitle"></div>
+        <div id="victory-sep"></div>
+        <canvas id="victory-graph"></canvas>
+        <button id="victory-new-game">New Game</button>
+    </div>
+</div>
+
+<div id="stats-overlay" class="hidden">
+    <div id="stats-inner">
+        <table id="stats-table">
+            <thead><tr id="stats-header-row"></tr></thead>
+            <tbody id="stats-body"></tbody>
+        </table>
+        <div id="stats-hint">Tap outside · S · Escape — close</div>
+    </div>
+</div>
+
+<div id="tech-overlay" class="hidden">
+    <div id="tech-overlay-inner">
+        <div id="tech-overlay-title">Technology Tree</div>
+        <canvas id="tech-tree-canvas"></canvas>
+        <div id="tech-overlay-hint">Tap an available tech to research it · Tap outside, T, or Escape to close</div>
+    </div>
+</div>
+
+<aside id="sidebar">
+
+    <div class="panel" id="civ-panel">
+        <div id="turn-label">Turn 1</div>
+        <div class="stat-row">
+            Gold <span id="stat-gold">0</span>
+        </div>
+        <div class="stat-row">
+            Science <span id="stat-sci">0</span>
+        </div>
+        <div class="stat-row">
+            Culture <span id="stat-culture">0</span>
+        </div>
+        <div style="margin-top:6px">
+            <div class="stat-row">
+                Research: <span id="stat-research">—</span>
+            </div>
+            <div class="pbar-wrap">
+                <div class="pbar-fill" id="research-bar" style="width:0%;background:#5080d0"></div>
+            </div>
+        </div>
+        <div id="seed-row">
+            <label style="font-size:11px;color:#5a6a80">Seed</label>
+            <input id="seed-input" type="number" value="0">
+            <button id="new-map-btn">New Game</button>
+        </div>
+    </div>
+
+    <div class="panel hidden" id="unit-panel">
+        <div class="panel-title" id="unit-title">Unit</div>
+        <div class="stat-row">HP <span id="unit-hp"></span></div>
+        <div class="pbar-wrap">
+            <div class="pbar-fill" id="unit-hp-bar" style="width:100%;background:#4c4"></div>
+        </div>
+        <div class="stat-row">Moves <span id="unit-moves"></span></div>
+        <div class="stat-row">XP <span id="unit-xp"></span></div>
+        <div class="stat-row hidden" id="unit-build-row">Building <span id="unit-build"></span></div>
+        <div class="action-grid" id="unit-actions"></div>
+    </div>
+
+    <div class="panel hidden" id="city-panel">
+        <div class="panel-title" id="city-title">City</div>
+        <div class="stat-row">Population <span id="city-pop"></span></div>
+        <div class="stat-row">HP <span id="city-hp"></span></div>
+        <div class="pbar-wrap">
+            <div class="pbar-fill" id="city-hp-bar" style="width:100%;background:#5080d0"></div>
+        </div>
+        <div class="stat-row">Food <span id="city-food"></span></div>
+        <div class="pbar-wrap">
+            <div class="pbar-fill" id="city-food-bar" style="width:0%;background:#4c4"></div>
+        </div>
+        <div style="margin-top:6px">
+            <div class="stat-row">Yields: <span id="city-yields"></span></div>
+        </div>
+        <div style="margin-top:8px">
+            <div class="section-label">Production</div>
+            <div id="city-production-info" style="font-size:12px;color:#bbb;margin-bottom:4px"></div>
+            <div class="scroll-list" id="production-list"></div>
+        </div>
+        <div style="margin-top:6px">
+            <div class="section-label">Buildings</div>
+            <div id="city-buildings" style="font-size:11px;color:#8a9aaa;line-height:1.6"></div>
+        </div>
+    </div>
+
+    <div class="panel hidden" id="msg-panel">
+        <div class="section-label">Event</div>
+        <div id="msg-text"></div>
+    </div>
+
+    <div style="flex:1"></div>
+
+    <div class="panel">
+        <div class="save-row">
+            <button id="save-btn">Save</button>
+            <button id="export-btn">Export…</button>
+        </div>
+        <button id="stats-btn" style="margin-bottom:6px;width:100%">Stats</button>
+        <button id="end-turn-btn">End Turn ▶</button>
+    </div>
+
+</aside>
+
+<div id="tooltip"></div>
+
+<script src="js/hex.js"></script>
+<script src="js/mapgen.js"></script>
+<script src="js/state.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/persistence.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>

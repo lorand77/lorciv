@@ -1,0 +1,312 @@
+/* LorCiv stylesheet. The dark scheme is the default; the light values at the
+   end apply when <html data-scheme="light"> is set (nothing sets it yet).
+   Use the variables for anything that should follow the scheme. */
+:root {
+  --text: #fff;
+  --text-2: #d8d8d8;          /* labels, secondary text */
+  --text-muted: #969696;
+  --surface: #333;            /* panels */
+  --surface-2: #2b2b2b;       /* rows and cards inside panels, top bar, rail */
+  --surface-raised: #3c3c3c;  /* dialogs, the login card */
+  --sunken: #1e1e1e;          /* text inputs */
+  --inset: #2a2a2a;           /* row hover */
+  --border: #4a4a4a;
+  --line: #444;               /* table and card dividers */
+  --field-bg: #444;
+  --field-border: #555;
+  --field-border-strong: #666;
+  --btn: #555;
+  --btn-hover: #777;
+  --btn-text: #fff;
+  --disabled-bg: #444;
+  --disabled-text: #888;
+  --accent: #3d6098;          /* filled "primary" buttons, the current rail item */
+  --accent-hover: #4a73b5;
+  --link: #8aa6c8;
+  --good: #7fc77f;
+  --bad: #ff6464;
+  --warn: #ffc864;
+  --page-bg: #323232;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+  background: var(--page-bg);
+  color: var(--text);
+  font-family: Arial, sans-serif;
+  display: flex;
+  justify-content: center;
+}
+a { color: var(--link); }
+
+button {
+  background: var(--btn); color: var(--btn-text); border: 0;
+  padding: 8px 14px; margin: 4px 6px 4px 0;
+  cursor: pointer; border-radius: 4px; font-size: 13px;
+}
+button:hover { background: var(--btn-hover); }
+button:disabled { background: var(--disabled-bg); color: var(--disabled-text); cursor: default; }
+/* Filled buttons keep white text in either scheme. */
+button.primary { background: var(--accent); color: #fff; }
+button.primary:hover { background: var(--accent-hover); }
+button.danger { background: #6a2a2a; color: #fff; }
+button.danger:hover { background: #8a3a3a; }
+select, input[type="text"], input[type="password"], input[type="number"] {
+  background: var(--field-bg); color: var(--text);
+  border: 1px solid var(--field-border-strong); border-radius: 4px;
+  padding: 5px 6px; font-size: 13px;
+}
+.muted { color: var(--text-muted); }
+.small { font-size: 12px; }
+
+/* A page's content column. */
+.page { width: 100%; max-width: 900px; min-width: 0; }
+
+/* --- panels and rows --- */
+.panel {
+  margin: 18px 0;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--text-2);
+  font-weight: bold;
+}
+.panel h2 .count { color: var(--text-muted); font-weight: normal; }
+.panel p { margin: 6px 0; font-size: 14px; line-height: 1.5; }
+.list { display: flex; flex-direction: column; gap: 6px; }
+.list .empty { margin: 2px 0; }
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  font-size: 13px;
+}
+.row .row-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.row button { margin: 0; padding: 4px 12px; font-size: 12px; }
+.name { font-weight: bold; color: var(--text); }
+
+/* Server connection indicator in the top bar (pages with a socket set it). */
+.conn-dot { font-weight: bold; font-size: 12px; }
+.conn-dot.pending { color: var(--warn); }
+.conn-dot.ok { color: var(--good); }
+.conn-dot.bad { color: var(--bad); }
+.conn-dot:empty { display: none; }
+
+/* User bar: who is signed in, and the logout button (public/js/authGuard.js). */
+.userbar { display: flex; align-items: center; gap: 10px; color: var(--text-2); font-size: 13px; }
+.userbar .who { font-weight: bold; color: var(--text); }
+.userbar button { margin: 0; padding: 4px 10px; font-size: 12px; }
+
+/* --- auth (login.html) --- */
+.auth-card {
+  width: 320px;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 60px auto 0;
+  background: var(--surface-raised);
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  padding: 28px 28px 24px;
+}
+.auth-card h1 { margin: 0 0 4px; font-size: 24px; }
+.auth-card .tagline { margin: 0 0 20px; color: var(--text-muted); font-size: 13px; }
+.auth-card label { display: block; margin: 12px 0 4px; font-size: 13px; color: var(--text-2); }
+.auth-card input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--sunken);
+  color: var(--text);
+  border: 1px solid var(--field-border-strong);
+  border-radius: 4px;
+  padding: 9px 10px;
+  font-size: 14px;
+}
+.auth-card input:focus { outline: none; border-color: var(--link); }
+.auth-actions { display: flex; gap: 10px; margin-top: 18px; }
+.auth-actions button { flex: 1; margin: 0; padding: 10px; }
+.auth-error { color: var(--bad); font-size: 13px; min-height: 18px; margin-top: 12px; }
+.auth-msg { color: var(--good); font-size: 13px; min-height: 18px; margin-top: 12px; }
+.auth-legal { margin: 8px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+
+/* --- terms.html, privacy.html: plain readable text, no shell --- */
+.legal-page {
+  max-width: 720px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 20px 32px 28px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.legal-page h1 { margin: 8px 0 4px; color: var(--text); font-size: 26px; }
+.legal-page h2 { margin: 28px 0 8px; color: var(--text); font-size: 18px; }
+.legal-page li { margin-bottom: 6px; }
+.legal-page strong { color: var(--text); }
+.legal-updated { margin: 0 0 20px; color: var(--text-muted); font-size: 13px; }
+.legal-back a, .legal-links a { text-decoration: none; }
+.legal-links { margin-top: 32px; }
+@media (max-width: 700px) {
+  .legal-page { padding: 14px 18px 20px; }
+}
+
+/* ================= app shell: top bar + fixed left rail ================= */
+/* Built by public/js/shell.js. The rail is pinned to the viewport's left edge
+   rather than sitting inside the centred content, so it reads as site chrome
+   and stays put as you move between pages. */
+:root { --rail-w: 200px; --topbar-h: 48px; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 20px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.topbar .brand {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: bold;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+
+body.has-shell {
+  display: block;
+  padding: 0 0 32px;
+}
+body.has-shell .topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--topbar-h);
+  box-sizing: border-box;
+  z-index: 60;
+}
+
+.app-rail {
+  position: fixed;
+  top: var(--topbar-h);
+  left: 0;
+  bottom: 0;
+  width: var(--rail-w);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+  z-index: 55;
+}
+.rail-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  color: var(--text-2);
+  font-size: 14px;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+}
+.rail-item:hover { background: #3a3a3a; color: var(--text); }
+.rail-item.current {
+  background: var(--accent);
+  border-left-color: var(--link);
+  color: #fff;
+  font-weight: bold;
+  cursor: default;
+}
+.rail-icon { width: 18px; text-align: center; flex: 0 0 18px; }
+.rail-label { min-width: 0; }
+.rail-legal { margin-top: auto; padding: 12px 12px 0; display: flex; gap: 12px; font-size: 12px; }
+.rail-legal a { color: var(--text-muted); text-decoration: none; }
+.rail-legal a:hover { color: var(--text-2); }
+
+.app-main {
+  margin-left: var(--rail-w);
+  padding-top: var(--topbar-h);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+/* The content column sits centred inside the main column. */
+body.has-shell .app-main > .page { margin: 0 auto; padding: 0 20px; }
+
+@media (max-width: 700px) {
+  :root { --rail-w: 0px; }
+  /* No room to pin a column: the rail becomes a scrolling strip of chips
+     directly under the top bar. */
+  .app-rail {
+    position: static;
+    flex-direction: row;
+    width: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    padding: 8px 10px;
+    margin-top: var(--topbar-h);
+  }
+  .app-rail .rail-item { white-space: nowrap; border-left: none; border-bottom: 3px solid transparent; }
+  .app-rail .rail-item.current { border-left: none; border-bottom-color: var(--link); }
+  .rail-legal { margin: 0 0 0 auto; padding: 0 6px; align-items: center; white-space: nowrap; }
+  .app-main { margin-left: 0; padding-top: 0; }
+}
+
+/* ================= light colour scheme ================= */
+/* Applies with <html data-scheme="light">. Most of the work is the variables;
+   the rules below them are the fills whose dark values would sit like holes in
+   a light page. */
+:root[data-scheme="light"] {
+  --text: #1f1f1f;
+  --text-2: #3d3d3d;
+  --text-muted: #6b6b6b;
+  --surface: #fff;
+  --surface-2: #f4f4f4;
+  --surface-raised: #fff;
+  --sunken: #f7f7f7;
+  --inset: #efefef;
+  --border: #d6d6d6;
+  --line: #e2e2e2;
+  --field-bg: #fff;
+  --field-border: #c4c4c4;
+  --field-border-strong: #b3b3b3;
+  --btn: #e3e3e3;
+  --btn-hover: #d2d2d2;
+  --btn-text: #1f1f1f;
+  --disabled-bg: #ececec;
+  --disabled-text: #a3a3a3;
+  --link: #2f5f9e;
+  --good: #2e7d32;
+  --bad: #c62828;
+  --warn: #a15c00;
+  --page-bg: #ececec;
+  color-scheme: light;
+}
+[data-scheme="light"] .panel { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+[data-scheme="light"] .rail-item:not(.current):hover { background: #e6e6e6; }
+[data-scheme="light"] button.danger { background: #b83b3b; }
+[data-scheme="light"] button.danger:hover { background: #a02f2f; }

@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Vendored WebAssembly (Stockfish) is binary; never let line-ending rules near it.
+*.wasm binary

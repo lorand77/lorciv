@@ -1,0 +1,10 @@
+node_modules/
+data/*.sqlite
+data/*.sqlite-journal
+data/*.sqlite-wal
+data/*.sqlite-shm
+.env
+
+# Reference copy of the lorchess source, used while copying scaffolding. Not
+# part of lorciv; delete it when the port is done.
+lorchess/

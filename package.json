@@ -1,0 +1,34 @@
+{
+  "name": "lorciv",
+  "version": "0.1.0",
+  "description": "Multiplayer Civ Lite — a turn-based 4X web game for humans and AIs.",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node --watch --env-file-if-exists=.env src/server.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:watch": "node --test --watch \"test/**/*.test.js\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=\"test/**\" \"test/**/*.test.js\"",
+    "db:reset": "node --env-file-if-exists=.env src/db/reset.js",
+    "user:password": "node --env-file-if-exists=.env src/db/setPassword.js",
+    "user:deactivate": "node --env-file-if-exists=.env src/db/deactivate.js deactivate",
+    "user:reactivate": "node --env-file-if-exists=.env src/db/deactivate.js reactivate"
+  },
+  "dependencies": {
+    "argon2": "0.44.0",
+    "better-sqlite3": "12.11.1",
+    "better-sqlite3-session-store": "0.1.0",
+    "express": "5.1.0",
+    "express-session": "1.19.0",
+    "socket.io": "4.8.3",
+    "socket.io-parser": "4.2.7"
+  },
+  "devDependencies": {
+    "socket.io-client": "4.8.3"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "argon2@0.44.0": true
+  }
+}

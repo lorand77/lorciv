@@ -290,7 +290,7 @@ describe what now exists.
   throwing; each action method refuses what it should.
 - Done when: `src/shared/` has no DOM reference and the tests pass.
 
-### M2 — Server game loop (large)
+### M2 — Server game loop (large) — done 2026-10-10
 
 - Schema: `games`, `game_seats`, `game_actions`; `queries.js`.
 - `rooms.js`: create, load, persist, apply action, run AI seats, timers.

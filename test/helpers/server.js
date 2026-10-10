@@ -42,6 +42,9 @@ async function startServer() {
       await shutdownSockets();
       server.closeAllConnections();
       await new Promise((resolve) => io.close(() => resolve()));
+      // A real restart starts with no rooms in memory; the next server built
+      // against the same database must rebuild them from it.
+      require("../../src/game/rooms").clearAll();
     },
   };
 }

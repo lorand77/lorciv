@@ -310,3 +310,19 @@ body.has-shell .app-main > .page { margin: 0 auto; padding: 0 20px; }
 [data-scheme="light"] .rail-item:not(.current):hover { background: #e6e6e6; }
 [data-scheme="light"] button.danger { background: #b83b3b; }
 [data-scheme="light"] button.danger:hover { background: #a02f2f; }
+
+/* --- lobby: the new-game form and the games list --- */
+.seat-rows { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.seat-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--surface-2); border-radius: 4px; font-size: 13px; }
+.seat-row .name { min-width: 90px; }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.4); flex: 0 0 12px; }
+.form-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--text-2); }
+.form-row label { display: flex; align-items: center; gap: 6px; }
+.form-row input[type="number"] { width: 110px; }
+.form-row button { margin: 0; }
+.form-error { color: var(--bad); font-size: 13px; }
+.tag { padding: 1px 7px; border-radius: 10px; font-size: 11px; background: var(--inset); color: var(--text-2); }
+.tag.you { background: var(--accent); color: #fff; }
+/* A link styled as a button, for rows that lead somewhere. */
+.button-link { padding: 4px 12px; border-radius: 4px; background: var(--btn); color: var(--btn-text); font-size: 12px; text-decoration: none; }
+.button-link:hover { background: var(--btn-hover); }

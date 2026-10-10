@@ -11,6 +11,7 @@ const express = require("express");
 const log = require("./log");
 const sessionMiddleware = require("./auth/session");
 const authRoutes = require("./auth/routes");
+const gameRoutes = require("./game/routes");
 const { attachSockets } = require("./game/socket");
 
 // At or over this, a request is logged as a warning.
@@ -74,6 +75,7 @@ function createServer() {
   const api = (mount, router) =>
     app.use(mount, (req, res, next) => { req.mount = mount; next(); }, router);
   api("/api", authRoutes);
+  api("/api/games", gameRoutes);
 
   // --- Static assets ---
   // One copy of the game engine, in src/shared, served at /js/*. Mounted before

@@ -1,18 +1,21 @@
 "use strict";
 
-// Socket.IO infrastructure: the handshake reuses the SAME Express session
-// (io.engine.use), every incoming event re-checks that session, and every
-// handler runs under a try/catch so one failure cannot take the process down.
-//
-// The game events (joining a game, acting, watching) are registered here too,
-// as they are built: this module owns every Socket.IO event, and the modules
-// it calls own the state (see docs/design.md).
+// Socket.IO infrastructure and the game events. The handshake reuses the SAME
+// Express session (io.engine.use), every incoming event re-checks that
+// session, and every handler runs under a try/catch so one failure cannot
+// take the process down. This module owns every Socket.IO event; the rooms
+// (rooms.js) own the state (see docs/design.md, "The game on the server").
 
 const { Server } = require("socket.io");
 const log = require("../log");
 const sessionMiddleware = require("../auth/session");
 const queries = require("../db/queries");
 const config = require("../config");
+const rooms = require("./rooms");
+
+// Everyone looking at a game, players and spectators, sits in this room and
+// receives every state broadcast.
+const gameRoom = (gameId) => `game:${gameId}`;
 
 // One room per user, so a message for a person reaches every tab they have
 // open instead of whichever socket we happened to pick.
@@ -90,10 +93,63 @@ function attachSockets(httpServer) {
       });
     };
 
+    on("game:join", (payload, ack) => handleJoin(io, socket, payload, ack));
+    on("game:action", (payload, ack) => handleAction(io, socket, payload, ack));
+
     on("disconnect", (reason) => socket.log.info("socket.disconnect", { reason }));
   });
 
   return io;
+}
+
+function roomFor(payload) {
+  const gameId = Number(payload?.gameId);
+  return Number.isInteger(gameId) ? rooms.getRoom(gameId) : null;
+}
+
+// Join a game's room and get its full state. A user with a seat plays; anyone
+// else watches (mySeat null). The same event resumes after a reload or a
+// reconnect, so the client never needs a separate "catch me up".
+function handleJoin(io, socket, payload, ack) {
+  const room = roomFor(payload);
+  if (!room) return reply(ack, { ok: false, error: "no_such_game" });
+  const seat = rooms.seatOf(room, socket.userId);
+  socket.join(gameRoom(room.gameId));
+  socket.log.debug("game.join", { game: room.gameId, seat });
+  reply(ack, { ok: true, state: rooms.viewFor(room, seat) });
+}
+
+// A player's action: seat, freshness, then the shared validator inside
+// rooms.applyPlayerAction. `seq` is the state the client acted on; a stale one
+// is refused and that client is re-synced, so nobody acts on an old view.
+function handleAction(io, socket, payload, ack) {
+  const room = roomFor(payload);
+  if (!room) return reply(ack, { ok: false, error: "no_such_game" });
+  const seat = rooms.seatOf(room, socket.userId);
+  if (seat === null) return reply(ack, { ok: false, error: "not_seated" });
+  if (payload.seq !== room.seq) {
+    reply(ack, { ok: false, error: "stale", seq: room.seq });
+    socket.emit("game:state", rooms.viewFor(room, seat));
+    return;
+  }
+  const action = {
+    type: payload.type, unitId: payload.unitId, cityId: payload.cityId,
+    q: payload.q, r: payload.r, key: payload.key,
+  };
+  const res = rooms.applyPlayerAction(room, seat, socket.userId, action);
+  reply(ack, res);
+  if (res.ok) broadcastState(io, room);
+}
+
+// Each socket gets its own view (rooms.viewFor), so a per-seat filter such as
+// fog of war would change nothing here.
+function broadcastState(io, room) {
+  const ids = io.sockets.adapter.rooms.get(gameRoom(room.gameId));
+  if (!ids) return;
+  for (const id of ids) {
+    const s = io.sockets.sockets.get(id);
+    if (s) s.emit("game:state", rooms.viewFor(room, rooms.seatOf(room, s.userId)));
+  }
 }
 
 function reply(ack, obj) {

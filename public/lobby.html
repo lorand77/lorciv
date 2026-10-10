@@ -9,15 +9,34 @@
 <body>
 <div class="page">
   <section class="panel">
-    <h2>Lobby</h2>
-    <p class="muted">Nothing to play yet. Games, tables and AI seats come next;
-    for now this page only shows that you are signed in.</p>
+    <h2>New game</h2>
+    <p class="muted small">Four civilizations. You take one seat; the others are played by the
+    server. Open seats for other people come later.</p>
+    <div id="seat-rows" class="seat-rows"></div>
+    <div class="form-row">
+      <label>Seed <input id="seed-input" type="number" min="0" step="1"></label>
+      <button id="seed-random" type="button">Random</button>
+      <label>Turn time <select id="turn-time"></select></label>
+      <button id="start-btn" class="primary" type="button">Start game</button>
+      <span id="new-game-error" class="form-error"></span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>My games <span class="count" id="games-count"></span></h2>
+    <div id="games-list" class="list"><p class="muted empty">Loading…</p></div>
   </section>
 </div>
 
-<!-- shell.js builds the top bar and the rail; authGuard.js must load after it
-     so the user bar it fills in is the one in the top bar. -->
+<!-- The engine's catalogues give the civ names, colours and settings lists;
+     shell.js builds the chrome; authGuard.js must load after it. -->
+<script src="/js/hex.js"></script>
+<script src="/js/state.js"></script>
+<script src="/js/mapgen.js"></script>
+<script src="/js/game.js"></script>
+<script src="/js/settings.js"></script>
 <script src="/js/shell.js"></script>
 <script src="/js/authGuard.js"></script>
+<script src="/js/lobby.js"></script>
 </body>
 </html>

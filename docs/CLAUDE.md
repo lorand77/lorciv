@@ -23,21 +23,23 @@ under `src/game/` or `src/shared/`.
   `app.js` on a random port against a throwaway database, one per test file.
 - `src/<area>/routes.js` — Express routers mounted at `/api/<area>` in `app.js`
   (auth is mounted at `/api` itself). `src/game/socket.js` owns every
-  Socket.IO event; `src/game/rooms.js` will own the in-memory game state.
+  Socket.IO event; `src/game/rooms.js` owns the live games: the engine
+  instance per game, its seats, and every write to the database.
 - `src/shared/` — the game engine, loaded by browser and Node alike and served
   at `/js/`: `hex`, `state`, `mapgen`, `game`, `ai` (server only), `snapshot`,
   `settings`, `actions`. Player actions go through `actions.js` and nowhere else.
 - `public/*.html` pages with their scripts in `public/js/`; `shell.js` builds
-  the top bar and rail, `authGuard.js` bounces signed-out visitors to login,
-  `renderer.js` is the canvas map. `public/assets/` holds the terrain and
-  resource images.
+  the top bar and rail, `authGuard.js` bounces signed-out visitors to login.
+  `game.html` is the game: `ui.js` (renders snapshots, sends actions),
+  `renderer.js` (the canvas map), `game.css`. `lobby.html`/`lobby.js` start
+  and list games. `public/assets/` holds the terrain and resource images.
 - `tools/simulate.js` — N AI-only games with win counts; run by hand, never
   loaded by the app.
 - `test/unit`, `test/integration` — `node --test`. `test/helpers/server.js`
   boots the server; `test/helpers/logs.js` captures log lines for assertions.
-- `civ_lite-old/` — the single-player original. Its engine is ported; its page
-  (`ui.js`, `index.html`, `style.css`) is the reference for M2's game page.
-  Deleted once that is done.
+- `civ_lite-old/` — the single-player original. Everything in it is ported;
+  it is kept only until the game page has been checked against it in a
+  browser, then deleted.
 - `lorchess/` — gitignored reference copy of the sister project the scaffolding
   was copied from. Never required at runtime; delete it when no longer needed.
 

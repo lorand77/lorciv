@@ -1,0 +1,310 @@
+/* LorCiv game page. From the original Civ Lite stylesheet; the setup screen
+   and the save/export row are gone (the server holds every game now). */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #0a0a1a;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    display: flex;
+    height: 100vh;
+    color: #ccc;
+}
+
+/* ---- Canvas ---- */
+#game-canvas {
+    flex: 1;
+    display: block;
+    cursor: grab;
+    min-width: 0;
+}
+
+/* ---- Scoreboard (top-right HUD over canvas) ---- */
+#scoreboard {
+    position: fixed;
+    top: 10px;
+    right: 282px;
+    width: 240px;
+    z-index: 100;
+    background: rgba(15, 15, 25, 0.82);
+    border: 1px solid #50506e;
+    border-radius: 4px;
+    padding: 8px 10px 10px;
+    font-size: 13px;
+    pointer-events: none;
+}
+#scoreboard.hidden { display: none; }
+#scoreboard .sb-title {
+    text-align: center;
+    color: #c8c8dc;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #46466a;
+    margin-bottom: 6px;
+}
+#scoreboard .sb-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    line-height: 1.3;
+}
+#scoreboard .sb-swatch {
+    width: 12px; height: 12px;
+    flex-shrink: 0;
+    border: 1px solid rgba(0,0,0,0.4);
+}
+#scoreboard .sb-name { flex: 1; }
+#scoreboard .sb-score { font-variant-numeric: tabular-nums; }
+#scoreboard .sb-elim { color: #707080; }
+
+/* ---- Sidebar ---- */
+#sidebar {
+    width: 272px;
+    flex-shrink: 0;
+    background: #111827;
+    border-left: 1px solid #2a3040;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.panel {
+    padding: 10px 12px;
+    border-bottom: 1px solid #1e2840;
+}
+
+.panel-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e8d48b;
+    margin-bottom: 5px;
+    letter-spacing: 0.5px;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-bottom: 2px;
+    color: #bbb;
+}
+.stat-row span { color: #eee; }
+
+/* Turn / civ header */
+#turn-label {
+    font-size: 15px;
+    font-weight: 700;
+    color: #e8d48b;
+    margin-bottom: 6px;
+}
+
+/* Progress bar */
+.pbar-wrap {
+    background: #1a2030;
+    border-radius: 3px;
+    height: 7px;
+    margin: 3px 0 5px;
+    overflow: hidden;
+}
+.pbar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.2s;
+}
+
+/* Action buttons */
+.action-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+button {
+    background: #1e2d40;
+    border: 1px solid #2e4060;
+    border-radius: 4px;
+    color: #ccc;
+    font-size: 12px;
+    padding: 5px 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s;
+}
+button:hover:not(:disabled) { background: #2a3f5a; color: #fff; }
+button:disabled { opacity: 0.35; cursor: default; }
+button.primary {
+    background: #1e3d1e;
+    border-color: #2e5a2e;
+    color: #8fe88f;
+}
+button.primary:hover:not(:disabled) { background: #28502a; }
+button.danger {
+    background: #3d1e1e;
+    border-color: #5a2e2e;
+    color: #e88f8f;
+}
+
+/* End turn */
+#end-turn-btn {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    background: #1a3a2a;
+    border-color: #2a5a3a;
+    color: #6ed48a;
+    letter-spacing: 0.5px;
+}
+#end-turn-btn:hover { background: #224a34; }
+
+/* Production list */
+.prod-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 6px;
+    border-radius: 3px;
+    margin-bottom: 2px;
+    cursor: pointer;
+    font-size: 12px;
+    background: #161e2e;
+    border: 1px solid transparent;
+}
+.prod-item:hover { background: #1e2a40; border-color: #3a4a60; }
+.prod-item.active { border-color: #e8d48b; background: #1e2820; }
+.prod-item .cost { color: #e8d48b; font-size: 11px; margin-left: 8px; margin-right: auto; }
+.prod-item .buy-btn {
+    margin-left: auto; padding: 1px 6px; font-size: 10px;
+    background: #3a2a00; border: 1px solid #8a6a00; border-radius: 3px;
+    color: #ffd060; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.prod-item .buy-btn:hover { background: #5a4000; }
+.prod-item .buy-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* Messages */
+#msg-text {
+    font-size: 12px;
+    color: #e8c87a;
+    line-height: 1.5;
+}
+
+/* Tooltip */
+#tooltip {
+    position: fixed;
+    background: rgba(0,0,0,0.85);
+    color: #eee;
+    font-size: 12px;
+    padding: 5px 9px;
+    border-radius: 4px;
+    border: 1px solid #444;
+    pointer-events: none;
+    display: none;
+    white-space: pre;
+    line-height: 1.6;
+    z-index: 10;
+}
+
+/* Hidden utility */
+.hidden { display: none !important; }
+
+/* Separator label */
+.section-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #5a6a80;
+    margin: 4px 0 3px;
+}
+
+/* Civ color dot */
+.civ-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+/* Scrollable list inside panel */
+.scroll-list { max-height: 180px; overflow-y: auto; }
+
+/* Tech tree overlay */
+#tech-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(5,8,20,0.96);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+}
+#tech-overlay.hidden { display: none; }
+#tech-overlay-inner { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+#tech-overlay-title { color: #e8d48b; font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+#tech-overlay-hint { color: #5a6a80; font-size: 12px; }
+#tech-tree-canvas { border: 1px solid #2a3040; border-radius: 4px; cursor: pointer; }
+
+/* Stats overlay */
+#stats-overlay {
+    position: fixed; inset: 0; z-index: 250;
+    background: rgba(0,0,5,0.82);
+    display: flex; align-items: center; justify-content: center;
+}
+#stats-overlay.hidden { display: none; }
+#stats-inner {
+    background: rgba(20,20,30,0.97);
+    border: 2px solid #646482;
+    border-radius: 6px;
+    overflow: hidden;
+    min-width: 580px;
+}
+#stats-table { width: 100%; border-collapse: collapse; }
+#stats-table th {
+    padding: 10px 16px; font-size: 14px; font-weight: 700; text-align: center;
+    border-bottom: 1px solid #505068;
+}
+#stats-table th:first-child { text-align: left; min-width: 148px; }
+#stats-table td {
+    padding: 5px 16px; font-size: 13px; text-align: center; height: 32px;
+}
+#stats-table td:first-child { text-align: left; color: #b4b4b4; }
+.stats-stripe { background: rgba(255,255,255,0.05); }
+.stats-leader { background: rgba(255,200,0,0.14) !important; }
+#stats-hint { color: #646478; font-size: 11px; text-align: right; padding: 5px 10px; }
+
+/* Victory overlay */
+#victory-overlay {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(0,0,0,0.88);
+    display: flex; align-items: center; justify-content: center;
+}
+#victory-overlay.hidden { display: none; }
+#victory-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+#victory-title {
+    color: #ffd700; font-size: 72px; font-weight: 900; letter-spacing: 4px;
+    text-shadow: 0 0 40px #ffd70066;
+}
+#victory-subtitle { font-size: 26px; font-weight: 600; }
+#victory-sep { width: 640px; height: 1px; background: #3a3a6a; margin: 2px 0; }
+#victory-graph { border: 1px solid #3a3a5a; border-radius: 4px; }
+#victory-lobby {
+    margin-top: 6px; padding: 10px 36px; font-size: 16px;
+    background: #6e1a1a; border: 2px solid #c84040; color: #fff;
+    cursor: pointer; border-radius: 4px;
+}
+#victory-lobby:hover { background: #9e2a2a; }
+
+/* ---- Page header inside the sidebar: back to the lobby, who is signed in ---- */
+#head-panel { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#head-panel .brand { color: #e8d48b; font-weight: 700; text-decoration: none; font-size: 14px; white-space: nowrap; }
+#userbar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #bbb; min-width: 0; }
+#userbar .who { color: #eee; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+#userbar button { padding: 2px 7px; font-size: 11px; }
+
+/* ---- Whose turn it is, and the connection ---- */
+#status-line { font-size: 12px; color: #9fb3c8; margin-bottom: 6px; min-height: 16px; }
+#status-line.mine { color: #6ed48a; font-weight: 600; }
+#conn-status { font-size: 11px; color: #ff9f6e; margin-bottom: 6px; }
+#end-turn-btn:disabled { opacity: 0.5; }

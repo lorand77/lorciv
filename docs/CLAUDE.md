@@ -63,4 +63,8 @@ under `src/game/` or `src/shared/`.
 - Catalogues (difficulties, turn-time presets, action names) are allowlists in
   `src/shared/`. Add entries there, not in ad-hoc lists elsewhere.
 - Native modules need a rebuild after `npm install` because `ignore-scripts` is
-  on globally: see "run the app" in `docs/setup.md`.
+  on globally, and that rebuild must bypass the Socket wrapper (`\npm rebuild`),
+  which otherwise silently produces no binary: see "run the app" in `docs/setup.md`.
+- In an interactive shell `npm` is aliased to `socket npm`; in a script or a
+  tool's shell it is plain npm. Use `socket npm` explicitly where the wrapper is
+  wanted, `\npm` where it is not.

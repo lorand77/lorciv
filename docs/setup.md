@@ -52,15 +52,29 @@ curl -fsSL https://claude.ai/install.sh | bash
 ```
 npm install
 
-# Native modules (better-sqlite3, argon2) compile a binary in their install
+# Native modules (better-sqlite3, argon2) get their binary from their install
 # script. Two gates block that script; the rebuild below clears both:
 #   1. our global ignore-scripts=true  -> --ignore-scripts=false lifts it
 #   2. npm's install-script allowlist  -> already granted by "allowScripts"
 #      in package.json (committed), so no `npm install-scripts approve` needed
-npm rebuild better-sqlite3 argon2 --foreground-scripts --ignore-scripts=false
+# The leading backslash skips the `npm` -> `socket npm` alias: see below.
+\npm rebuild better-sqlite3 argon2 --foreground-scripts --ignore-scripts=false
 
 npm start
 ```
+
+The rebuild must bypass the Socket wrapper. Since CLI 1.4 (Oct 2026) `socket npm`
+runs npm's lifecycle scripts under Node's permission model without
+`--allow-addons`. better-sqlite3's install script (`prebuild-install`) checks
+the binary it downloaded by loading it, which that mode forbids, so it fails;
+the wrapper then reports "rebuilt dependencies successfully" with no binary
+written, and the server dies at startup with "Could not locate the bindings
+file". `\npm` (or `command npm`) runs plain npm for this one step. Nothing is
+lost: the rebuild only runs the install scripts of two packages the preceding
+`npm install` already put through Socket.
+
+If `npm test` or `npm start` fails with "Could not locate the bindings file",
+the rebuild was run through the wrapper: run it again as above.
 
 ## test in browser
 open http://localhost:3000
@@ -142,8 +156,10 @@ only to change it:
 ## run the app
 ```
 npm install
-npm rebuild better-sqlite3 argon2 --foreground-scripts --ignore-scripts=false
+\npm rebuild better-sqlite3 argon2 --foreground-scripts --ignore-scripts=false
 ```
+(The backslash matters only where the Socket wrapper is aliased as `npm`; see
+"run the app" in the DEV section for why the rebuild must bypass it.)
 
 with pm2 (installed globally for the machine already):
 ```

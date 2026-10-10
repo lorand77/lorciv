@@ -75,9 +75,13 @@ function createServer() {
     app.use(mount, (req, res, next) => { req.mount = mount; next(); }, router);
   api("/api", authRoutes);
 
-  // --- Static UI (login.html, lobby.html, css, public/js/*) ---
-  // The game engine will be mounted at /js/ from src/shared ahead of this,
-  // so one copy serves the server and the browser (see docs/design.md).
+  // --- Static assets ---
+  // One copy of the game engine, in src/shared, served at /js/*. Mounted before
+  // the public static handler so /js/game.js resolves here while /js/shell.js
+  // and the other page scripts fall through to public/js (see docs/design.md).
+  app.use("/js", express.static(path.join(__dirname, "shared")));
+
+  // Static UI (login.html, lobby.html, css, assets, public/js/*).
   app.use(express.static(path.join(__dirname, "..", "public")));
   app.use(errorHandler);
 

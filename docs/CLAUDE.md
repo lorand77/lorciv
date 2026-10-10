@@ -25,13 +25,19 @@ under `src/game/` or `src/shared/`.
   (auth is mounted at `/api` itself). `src/game/socket.js` owns every
   Socket.IO event; `src/game/rooms.js` will own the in-memory game state.
 - `src/shared/` — the game engine, loaded by browser and Node alike and served
-  at `/js/`. Arrives with milestone M1; until then the directory does not exist.
+  at `/js/`: `hex`, `state`, `mapgen`, `game`, `ai` (server only), `snapshot`,
+  `settings`, `actions`. Player actions go through `actions.js` and nowhere else.
 - `public/*.html` pages with their scripts in `public/js/`; `shell.js` builds
-  the top bar and rail, `authGuard.js` bounces signed-out visitors to login.
+  the top bar and rail, `authGuard.js` bounces signed-out visitors to login,
+  `renderer.js` is the canvas map. `public/assets/` holds the terrain and
+  resource images.
+- `tools/simulate.js` — N AI-only games with win counts; run by hand, never
+  loaded by the app.
 - `test/unit`, `test/integration` — `node --test`. `test/helpers/server.js`
   boots the server; `test/helpers/logs.js` captures log lines for assertions.
-- `civ_lite-old/` — the single-player original the engine is ported from.
-  Reference only; it is deleted once everything in it has been ported.
+- `civ_lite-old/` — the single-player original. Its engine is ported; its page
+  (`ui.js`, `index.html`, `style.css`) is the reference for M2's game page.
+  Deleted once that is done.
 - `lorchess/` — gitignored reference copy of the sister project the scaffolding
   was copied from. Never required at runtime; delete it when no longer needed.
 

@@ -270,7 +270,7 @@ describe what now exists.
 - Done when: register and login work in the browser, the copied auth tests
   pass under `npm test`.
 
-### M1 — Engine in `src/shared/` (medium)
+### M1 — Engine in `src/shared/` (medium) — done 2026-10-10
 
 - Move `state.js`, `mapgen.js`, `game.js`, `ai.js`; split `hex.js` into hex
   math (shared) and `renderer.js` (public). Assets to `public/assets/`.

@@ -14,10 +14,12 @@ the database layer, the page shell) were copied from there and are now its own.
 
 ## Where things stand
 
-Milestone M0 of the plan is done: accounts and sessions work, and the pages
-are a login card, a placeholder lobby and the legal pages. **There is no game
-yet.** The sections below describe what exists. The last section lists what
-has been decided but not built.
+Milestones M0 and M1 of the plan are done: accounts and sessions work, the
+pages are a login card, a placeholder lobby and the legal pages, and the game
+engine lives in `src/shared/`, tested and served to the browser. **Nothing
+plays it yet:** the server has no game rooms and the old single-player page
+still sits in `civ_lite-old/` waiting for M2. The sections below describe what
+exists. The last section lists what has been decided but not built.
 
 ## Tech stack
 
@@ -39,16 +41,17 @@ src/
   db/          index.js (open, schema, migrations), schema.sql, queries.js,
                reset.js and the user CLI scripts (setPassword, deactivate)
   game/        socket.js — Socket.IO infrastructure; game events come in M2
+  shared/      the engine, served at /js/ ahead of public/ (see "The engine")
+               hex.js state.js mapgen.js game.js ai.js snapshot.js settings.js actions.js
 public/
   index.html login.html lobby.html terms.html privacy.html
   css/styles.css
-  js/          login.js net.js authGuard.js shell.js
+  assets/      terrain and resource PNGs
+  js/          login.js net.js authGuard.js shell.js renderer.js (the canvas map)
+tools/         simulate.js — N AI-only games, by hand
 test/          unit/, integration/, helpers/ (server.js, logs.js)
 docs/          CLAUDE.md design.md plan.md setup.md
 ```
-
-`src/shared/` (the engine, served at `/js/` ahead of `public/`) does not exist
-yet; `app.js` says where it will be mounted.
 
 ## Authentication
 
@@ -243,42 +246,41 @@ sets up; check it again then. The contact address is `lorciv@lorand77.dev`.
 When games, chat and spectating arrive (M2, M3), "What we store" and "Who can
 see it" must grow with them.
 
-## Next: the engine in `src/shared/` (M1 — designed, not built)
+## The engine: `src/shared/`
 
-This section is the design pass for milestone M1. It is written in the future
-tense and moves up into the sections above, in the present tense, as the code
-lands. The engine is the JavaScript port in `civ_lite-old/civ_lite_js/js/`:
-about 2,300 lines across five files, already separate from the canvas UI,
-already runnable headless in Node, deterministic from a seed.
+The engine is the JavaScript port of Civ Lite from `civ_lite-old/`, about
+2,300 lines: hex math, the catalogues and entities, map generation, the rules
+and turn loop, and the AI. It was already separate from the canvas UI,
+runnable headless in Node, and deterministic from a seed. M1 moved it here
+and made the changes a server needs.
 
 ### Files
 
-| from (`civ_lite-old/civ_lite_js/`) | to | change |
+| file | holds | M1 change |
 |---|---|---|
-| `js/hex.js` | `src/shared/hex.js` | hex math only (`hexNeighbors`, `hexDistance`, `hexesInRange`, `hexLine`, `axialRound`, `hexToPixel`, `pixelToHex`, `hexCorners`, `HEX_SIZE`) |
-| `js/hex.js` (`HexRenderer`, colour tables) | `public/js/renderer.js` | moved as is; it is the browser's canvas and nothing else |
-| `js/state.js` | `src/shared/state.js` | catalogues, entities, movement and line of sight; ids added |
-| `js/mapgen.js` | `src/shared/mapgen.js` | the PRNG gains `getState`/`setState` |
-| `js/game.js` | `src/shared/game.js` | ids, five new action methods, score history, AI state, RNG state |
-| `js/ai.js` | `src/shared/ai.js` | strategy state moves onto the game; `runCpuTurns` added |
-| `js/persistence.js` | `src/shared/snapshot.js` | the serializer and deserializer only, format version 2 |
-| — | `src/shared/actions.js` | new: `applyAction`, the one validator for player actions |
-| — | `src/shared/settings.js` | new: the allowlists (difficulties, turn times, action types) |
-| `simulate.js` | `tools/simulate.js` | ported to the new loading; run by hand, never by the app |
-| `assets/*.png` | `public/assets/` | moved |
+| `hex.js` | hex math (`hexNeighbors`, `hexDistance`, `hexesInRange`, `hexLine`, `axialRound`, `hexToPixel`, `pixelToHex`, `hexCorners`, `HEX_SIZE`) | split from the renderer |
+| `state.js` | catalogues (units, techs, buildings, improvements, resources, terrain), `Unit`, `City`, `Civilization`, movement and line of sight | units and cities carry an `id` |
+| `mapgen.js` | seeded map generation and the PRNG | the PRNG exposes `getState`/`setState` |
+| `game.js` | `Game`: rules, combat, yields, production, tech, `endTurn`, score | ids, `setup`, five order methods, score history, AI state |
+| `ai.js` | `aiTakeTurn`, `runCpuTurns` | strategy memory moved onto the game |
+| `snapshot.js` | `serializeGame`, `deserializeGame`, format version 2 | from the old save code, extended |
+| `settings.js` | the allowlists: difficulties, turn times, action names | new |
+| `actions.js` | `applyAction`, the one validator for player actions | new |
 
-`index.html`, `style.css` and `ui.js` stay where they are until M2, which
-rewrites them against the server. `src/app.js` mounts `src/shared/` at `/js/`
-ahead of `public/`, as LorChess does, so `/js/game.js` is the engine and
-`/js/shell.js` still falls through to `public/js/`.
+The canvas renderer that used to share `hex.js` is `public/js/renderer.js`,
+moved as it was except that it loads its images from `/assets/`. The old
+`simulate.js` is `tools/simulate.js`. The old page (`index.html`, `style.css`,
+`ui.js`) stays in `civ_lite-old/` until M2 rewrites it against the server.
 
 ### One file, two runtimes
 
-The engine files are classic scripts that refer to each other by bare names
-(`UNIT_DEFS`, `hexDistance`, `Game`), and they stay that way: a factory
-wrapper would touch every cross-file reference in 2,300 lines for no runtime
-gain. Each file gets `"use strict"`, a Node header and a Node tail, the
-convention LorChess's `lorfish.js` already uses:
+`src/app.js` mounts `src/shared/` at `/js/` ahead of `public/`, as LorChess
+does, so `/js/game.js` is the engine and `/js/shell.js` falls through to
+`public/js/`. The engine files are classic scripts that refer to each other by
+bare names (`UNIT_DEFS`, `hexDistance`, `Game`), and they stay that way: a
+factory wrapper would have touched every cross-file reference in 2,300 lines
+for no runtime gain. Each file is strict and has a Node header and a Node
+tail, the convention LorChess's `lorfish.js` uses:
 
 ```js
 // Node: the files this one reads as bare names, hoisted onto globalThis.
@@ -291,130 +293,133 @@ if (typeof module !== "undefined" && module.exports) module.exports = { Game, ..
 ```
 
 Browser load order: `hex`, `state`, `mapgen`, `game`, `snapshot`, `settings`,
-`actions`. The browser never loads `ai.js`. Nothing in `src/shared/` may touch
-`document`, `window`, `localStorage` or Node-only APIs; a test greps for it.
+`actions`, then `renderer`. The browser never loads `ai.js`. Nothing in
+`src/shared/` touches `document`, `window`, `localStorage` or Node-only APIs;
+`test/unit/engine.load.test.js` greps for it. The moved files keep the
+original's single quotes and four-space indent: match the file you are in.
 
 ### Identity
 
-Units and cities get an integer `id` from `game.nextId`, assigned at the three
-places the engine creates them: the starting units, production
-(`_completeItem`, also reached by buying) and `foundCity`. `game.unitById(id)`
-and `game.cityById(id)` are linear scans over the civs (a game has a few dozen
-units). Snapshots carry the ids and `nextId`. From M2 on, clients name a unit
-or city by id and never by position; object identity never crosses the wire.
+Units and cities have an integer `id` from `game.nextId`, assigned at the
+three places the engine creates them: the starting units, production
+(`_completeItem`, also reached by buying) and `foundCity`. A city keeps its id
+through capture. `game.unitById(id)` and `game.cityById(id)` are linear scans
+over the civs; a game has a few dozen of each, and a scan beats keeping an
+index in step with every capture. Clients name a unit or city by id and never
+by position; object identity never crosses the wire.
 
 ### Engine API
 
-Existing methods keep their signatures and return shapes, because the AI calls
-them: `moveUnit(unit, q, r, cost)`, `doAttack(unit, q, r)` (returns a
-message), `canFoundCity`/`foundCity`, `upgradeUnit`, `buyItem`
-(`[ok, message]`), `startImprovement` (boolean), `endTurn()`.
+The methods the AI calls kept their signatures and return shapes:
+`moveUnit(unit, q, r, cost)`, `doAttack(unit, q, r)` (returns a message),
+`canFoundCity`/`foundCity`, `upgradeUnit`, `buyItem` (`[ok, message]`),
+`startImprovement` (boolean), `endTurn()`.
 
-New methods, all returning `[ok, message]`, for what the old UI mutated
+Five methods, all returning `[ok, message]`, replace what the old UI mutated
 directly; their rules are the old UI's rules:
 
-- `fortify(unit)`: military, moves left, not already fortified.
+- `fortify(unit)`: military, moves left, not already fortified. Adds the first
+  quarter of fortify bonus at once, as the old button did.
 - `heal(unit)`: military, full moves (has not moved this turn), not healing.
 - `skip(unit)`: moves left; sets them to zero.
-- `setProduction(city, key)`: `key` is a unit or a building other than the
-  palace; its tech is known; for a unit needing a resource the civ owns a
-  tile with it; a building is not already built. Replaces the queue with that
-  one item and resets progress, as the old list did.
+- `setProduction(city, key)`, after `canProduce(city, key)`: `key` is a unit
+  or a building other than the palace; its tech is known; a unit needing a
+  resource needs a tile of it owned by the civ; a building is not already
+  built. Replaces the queue with that one item and resets progress, as the
+  old list did.
 - `setResearch(civ, key)`: the tech is not known and its prerequisites are.
   It may replace research in progress, as the old tree allowed.
 
-Also on the game: `scoreHistory`, recorded by `endTurn` each time the turn
-counter advances (one entry per round, `computeScore` per civ, which the
-victory graph draws); `aiState`, a per-civ object replacing the module-level
-`_civStrategies` in `ai.js`, which would otherwise be shared by every game on
-the server; and `rngState`, because bankruptcy draws from the game's seeded
-PRNG mid-game, so a snapshot without it would resume on a different random
-sequence. `ai.js` gains `runCpuTurns(game)`: while there is no winner and the
-current civ is a CPU, take its turn and end it. The simulator, the tests and
-later `rooms.js` all use it.
+Also on the game: `setup` (seed and the flags the civs were created with, so a
+snapshot can rebuild the same map); `scoreHistory`, one entry per completed
+round, recorded by `endTurn` when the turn counter advances (`computeScore`
+per civ; the victory graph draws it); `aiState`, the per-civ strategy memory
+that used to be a module-level object in `ai.js` and would have been shared by
+every game on the server; and the PRNG's state, because bankruptcy draws from
+it mid-game. `ai.js` has `runCpuTurns(game, maxTurn)`: while there is no
+winner and the current civ is a CPU, take its turn and end it. The simulator,
+the tests and later `rooms.js` all use it.
 
 **Determinism.** The map comes from the seed, combat has no randomness, the
 AI has none, and the only mid-game draw is bankruptcy from the seeded PRNG.
 So two games with the same seed and the same actions are identical, and a
 game resumed from any snapshot continues exactly as the unresumed one would.
-That is what makes the snapshot round-trip and the determinism tests possible.
+`test/unit/engine.determinism.test.js` checks both.
 
 ### `actions.js`: the one validator
 
 `applyAction(game, seat, action)` returns `{ ok: true, message }` or
-`{ ok: false, error }`. It is the only way a player's intent reaches the
-engine, on the server (M2) and, for previews, in the browser. Checks, in
-order: the game has no winner; `seat` is the current player and not
-eliminated; `action.type` is in `settings.ACTION_TYPES`; the unit or city
-named by id exists and belongs to the seat; the move is legal by the engine
-(`getReachableTiles` for `move`, which also gives the cost; `getAttackableTiles`
-for `attack`; `canFoundCity`; the Game method's own check for the rest); then
-apply. Errors are short codes (`game_over`, `not_your_turn`, `unknown_action`,
-`no_such_unit`, `no_such_city`, `not_yours`, `illegal`) with the engine's
-message where it has one.
+`{ ok: false, error, message }`. It is the only way a player's intent reaches
+the engine, on the server (M2) and, for previews, in the browser. Checks, in
+order: the game has no winner; `action.type` is in `settings.ACTION_TYPES`;
+`seat` is the current player and not eliminated; the unit or city named by id
+exists and belongs to the seat; the move is legal by the engine
+(`getReachableTiles` for `move`, which also gives the cost;
+`getAttackableTiles` for `attack`; `canFoundCity`; `canProduce`; the Game
+method's own check for the rest); then apply. `error` is a short code for the
+client to switch on (`game_over`, `unknown_action`, `not_your_turn`,
+`no_such_unit`, `no_such_city`, `not_yours`, `illegal`); `message` is the
+engine's own wording where it has one.
 
 | action | args | applies |
 |---|---|---|
 | `move` | unitId, q, r | `moveUnit` with the cost from `getReachableTiles` |
 | `attack` | unitId, q, r | `doAttack` |
-| `foundCity` | unitId | `foundCity` after `canFoundCity` |
-| `buildImprovement` | unitId, key | `startImprovement`; key in `IMPROVEMENT_DEFS` |
-| `fortify`, `heal`, `skip`, `upgrade` | unitId | the method of that name |
-| `setProduction`, `buy` | cityId, key | `setProduction`, `buyItem` |
+| `foundCity` | unitId | `foundCity` after `canFoundCity`; a settler with moves left |
+| `buildImprovement` | unitId, key | `startImprovement`; a worker with moves left, key in `IMPROVEMENT_DEFS` |
+| `fortify`, `heal`, `skip`, `upgrade` | unitId | the method of that name (`upgradeUnit`) |
+| `setProduction`, `buy` | cityId, key | `setProduction`; `buyItem` after `canProduce` |
 | `setResearch` | key | `setResearch` |
 | `endTurn` | — | `endTurn` only; running the AI seats that follow is the server's job (`rooms.js`, M2) |
 
-`leave` from the plan is not an engine action: handing a seat to the AI is
+Handing a seat to the AI (`leave` in the plan) is not an engine action: it is
 `civ.isCpu = true`, done by `rooms.js`.
 
 ### `snapshot.js`
 
-Format version 2, the old save format plus what M1 adds:
+Format version 2, the old save format plus what a resumed game needs:
 
 ```
 { version: 2,
   setup: { seed, cpuFlags, difficultyFlags },          // the map regenerates from the seed
   game:  { turn, currentPlayer, winner, nextId, rngState, scoreHistory, aiState,
-           civs: [{ playerIndex, gold, science, culture, currentResearch, techsResearched,
-                    isEliminated, pendingMessages, researchJustCompleted, originalCapital,
-                    cities: [{ id, ... }], units: [{ id, ... }] }] },
+           civs: [{ playerIndex, isCpu, gold, science, culture, currentResearch,
+                    techsResearched, isEliminated, pendingMessages, researchJustCompleted,
+                    originalCapital, cities: [{ id, ... }], units: [{ id, ... }] }] },
   tileMutations: [{ q, r, owner, improvement }] }      // tiles that differ from the generated map
 ```
 
-`serializeGame(game)` and `deserializeGame(obj)`; the old localStorage and
-file download/upload functions are dropped, since from M2 the server holds
-every save. During development a version bump means `npm run db:reset`; once
-games exist in production, a bump comes with a migration in this file.
+`isCpu` is saved per civ as well as in `setup`, because a seat can be handed
+to the AI mid-game. `serializeGame(game)` and `deserializeGame(obj)`;
+deserialize throws on any other version. The old localStorage and file
+download/upload functions are gone: from M2 the server holds every save.
+Measured on a whole AI-only game: 6 KB at turn 25, 19 KB at turn 125. During
+development a version bump means `npm run db:reset`; once games exist in
+production, a bump comes with a migration in this file.
 
 ### `settings.js`
 
-`DIFFICULTIES` (`prince`, `king`, `emperor`: a test checks they are the keys
+`DIFFICULTIES` (`prince`, `king`, `emperor`; a test checks they are the keys
 of the engine's `DIFFICULTY_DEFS`), `TURN_TIMES` (`none`, `1m`, `3m`, `10m`,
-`1h`, `1d`, `3d`, each with its milliseconds and label), `DEFAULT_TURN_TIME`
-(`3m`), `MISSED_TURN_LIMIT` (3), `SEATS` (4) and `ACTION_TYPES`. The server
-resolves every key a client sends against these; nothing else keeps a list.
+`1h`, `1d`, `3d`, each with its milliseconds and label; `turnTimeOf(key)`),
+`DEFAULT_TURN_TIME` (`3m`), `MISSED_TURN_LIMIT` (3), `SEATS` (4) and
+`ACTION_TYPES`. The server resolves every key a client sends against these;
+nothing else keeps a list.
 
-### Tests (`test/unit/engine.*.test.js`)
+### Tests
 
-- Every shared file loads in Node without a DOM, and none of them mentions
-  `document`, `window` or `localStorage`.
-- Determinism: two games from one seed, driven by `runCpuTurns` to the end,
-  serialize identically; a game deserialized from a mid-game snapshot and
-  played on matches the original.
-- Round-trip: deserialize then serialize is the identity, at several points
-  of a game.
-- A batch of AI-only games finishes without throwing, each with a winner or
-  at the turn cap.
-- `applyAction`: refuses the wrong seat, a finished game, an unknown type, a
-  unit that is not the seat's, an unreachable tile, an unknown item; accepts
-  and applies each valid action; `endTurn` advances the player.
-- `settings` agree with the engine's catalogues.
-- `GET /js/game.js` is served and `GET /js/shell.js` still falls through.
-
-### Done when
-
-`src/shared/` holds the engine, `tools/simulate.js` runs a batch, the tests
-above pass, and this section has moved up into the present tense.
+`test/unit/engine.*.test.js`: every shared file loads in Node and keeps to
+the two-runtime rules; two games from one seed are identical, and a game
+resumed from a snapshot matches the original to the end; serialize after
+deserialize is the identity at several points of a game, and the snapshot
+carries ids, random state, score history, AI memory and `isCpu`; a batch of
+AI-only games finishes with unique ids and one score entry per round;
+`applyAction` refuses the wrong seat, a finished game, an unknown type, a
+unit that is not the seat's, an unreachable tile and an unknown item, and
+applies each valid action; the settings agree with the engine's catalogues.
+`test/integration/static.shared.test.js`: `/js/game.js` is served and
+`/js/shell.js` still falls through. The engine tests take about 20 s, most of
+it AI play.
 
 ## Decided, not yet built
 
@@ -430,8 +435,7 @@ move up into the sections above as the code lands.
    (presets none, 1 min, 3 min, 10 min, 1 h, 1 day, 3 days; default 3 min),
    and a missed-turn limit (3) after which the seat is handed to the AI.
 5. **AI runs on the server**, on the main thread: a civ's turn takes 5 ms on
-   average and 57 ms at worst. Its module-level strategy state moves onto
-   the game in M1.
+   average and 57 ms at worst. `runCpuTurns` after a human's end of turn.
 6. **A user may be in several games at once.** Unlike LorChess's one-at-a-time.
 7. **All active games are rebuilt at boot**, not lazily, so turn timers re-arm
    whether or not anyone is connected.

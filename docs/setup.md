@@ -87,7 +87,7 @@ If `npm test` or `npm start` fails with "Could not locate the bindings file",
 the rebuild was skipped or ran through the wrapper: run the `\npm rebuild` line.
 
 ## test in browser
-open http://localhost:3000
+open http://localhost:3001
 
 ## run the tests
 ```
@@ -165,7 +165,6 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 cat > .env <<EOF
 SESSION_SECRET=<generated hex>
 NODE_ENV=production
-PORT=3001
 EOF
 
 chmod 600 .env
@@ -180,11 +179,12 @@ chmod 600 .env
   `.env`, so it does not make `npm ci` skip devDependencies: that is what
   `--omit=dev` is for. (Uncaught errors never send a stack trace to
   the client either way: `src/app.js` answers them itself.)
-- `PORT=3001` — LorChess has 3000 on this machine. Caddy proxies to it below.
 
 Everything else has a default and is read in `src/config.js`; put it in `.env`
 only to change it:
 
+- `PORT` — the HTTP port (default 3001; LorChess has 3000 on this machine, and
+  Caddy proxies to 3001 below).
 - `DB_PATH` — the SQLite file (default `data/lorciv.sqlite` in the project).
 - `DEADLINE_SWEEP_MS` — how often expired human turns are ended (default 1000).
 - `ABANDON_DAYS` — tables and games untouched this long are aborted (default 30).

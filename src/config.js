@@ -13,7 +13,9 @@ function intEnv(name, fallback) {
 // Central place for env-driven constants. Everything the environment can set
 // is declared here; nothing else reads process.env.
 module.exports = {
-  PORT: intEnv("PORT", 3000),
+  // LorChess has 3000 on the machine the two apps share; a different default
+  // keeps them apart in development as well.
+  PORT: intEnv("PORT", 3001),
 
   // Signs the session cookie. MUST be overridden in production via env.
   SESSION_SECRET: process.env.SESSION_SECRET || "dev-insecure-secret-change-me",

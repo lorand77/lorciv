@@ -16,7 +16,7 @@ under `src/game/` or `src/shared/`.
   there. A plain shell (a tool, a script) has no alias and `npm test` is fine.
 - `npm run test:coverage` — the suite with Node's built-in coverage report.
   Files no test loads (`src/server.js`, CLI scripts, `public/js/`) are not listed.
-- `npm run dev` — http://localhost:3000 with `--watch`; loads `.env` if present.
+- `npm run dev` — http://localhost:3001 with `--watch`; loads `.env` if present.
   Every env-driven constant is declared in `src/config.js`.
 - `npm run db:reset` deletes the local database. Ask before running it.
 

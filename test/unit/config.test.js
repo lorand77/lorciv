@@ -32,7 +32,7 @@ function loadConfig(env = {}) {
 describe("config", () => {
   test("defaults when nothing is set", () => {
     const c = loadConfig();
-    assert.equal(c.PORT, 3000);
+    assert.equal(c.PORT, 3001);
     assert.equal(c.SESSION_SECRET, "dev-insecure-secret-change-me");
     assert.equal(c.DB_PATH, path.resolve(__dirname, "../../data/lorciv.sqlite"));
     assert.equal(c.DEACTIVATION_SWEEP_MS, 30000);
@@ -70,7 +70,7 @@ describe("config", () => {
 
   test("unparseable numbers fall back to the defaults", () => {
     const c = loadConfig({ PORT: "eighty", DEACTIVATION_SWEEP_MS: "", REGISTER_MAX: "many" });
-    assert.equal(c.PORT, 3000);
+    assert.equal(c.PORT, 3001);
     assert.equal(c.DEACTIVATION_SWEEP_MS, 30000);
     assert.equal(c.REGISTER_MAX, 5);
   });

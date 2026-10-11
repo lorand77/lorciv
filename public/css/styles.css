@@ -1,6 +1,7 @@
-/* LorCiv stylesheet. The dark scheme is the default; the light values at the
-   end apply when <html data-scheme="light"> is set (nothing sets it yet).
-   Use the variables for anything that should follow the scheme. */
+/* LorCiv stylesheet. The dark scheme is the default; the light values apply
+   when <html data-scheme="light"> is set, which public/js/theme.js does for a
+   user who chose it on the Customize page. Use the variables for anything that
+   should follow the scheme. */
 :root {
   --text: #fff;
   --text-2: #d8d8d8;          /* labels, secondary text */
@@ -243,6 +244,10 @@ body.has-shell .topbar {
 }
 .rail-icon { width: 18px; text-align: center; flex: 0 0 18px; }
 .rail-label { min-width: 0; }
+/* My Profile's tabs, indented under it. While one of them is current, the
+   parent is only emphasised so the open tab is the one that stands out. */
+.app-rail .rail-sub { padding: 6px 12px 6px 30px; font-size: 13px; }
+.app-rail .rail-parent.current { background: none; border-left-color: transparent; color: var(--text); }
 .rail-legal { margin-top: auto; padding: 12px 12px 0; display: flex; gap: 12px; font-size: 12px; }
 .rail-legal a { color: var(--text-muted); text-decoration: none; }
 .rail-legal a:hover { color: var(--text-2); }
@@ -274,6 +279,13 @@ body.has-shell .app-main > .page { margin: 0 auto; padding: 0 20px; }
   .app-rail .rail-item.current { border-left: none; border-bottom-color: var(--link); }
   .rail-legal { margin: 0 0 0 auto; padding: 0 6px; align-items: center; white-space: nowrap; }
   .app-main { margin-left: 0; padding-top: 0; }
+  /* A single row has no room for nesting: the profile page's own tab bar
+     takes over, and My Profile is highlighted like any other page. */
+  .app-rail .rail-sub { display: none; }
+  .app-rail .rail-parent.current { background: var(--accent); color: #fff; }
+}
+@media (min-width: 701px) {
+  body.has-shell .profile-tabs.in-rail { display: none; }
 }
 
 /* ================= light colour scheme ================= */
@@ -350,3 +362,89 @@ body.has-shell .app-main > .page { margin: 0 auto; padding: 0 20px; }
 .lb-table th { color: var(--text-muted); font-weight: normal; font-size: 12px; }
 .lb-table td.num, .lb-table th:not(:nth-child(2)) { text-align: right; font-variant-numeric: tabular-nums; }
 .lb-table tr.me td { background: var(--inset); font-weight: bold; }
+
+/* A player's name linked to their profile: looks like the text around it. */
+a.player-link { color: inherit; text-decoration: none; }
+a.player-link:hover { text-decoration: underline; }
+
+/* --- friends (public/js/friends.js, the profile's Friends tab) --- */
+.friend-ctl { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.friend-ctl button { margin: 0; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
+.tag.friend { background: #2f5a3a; color: #bfe8c8; }
+.tag.pending { background: #4a4a30; color: #e8e0a0; }
+[data-scheme="light"] .tag.friend { background: #dcefe0; color: #1e5a2c; }
+[data-scheme="light"] .tag.pending { background: #f3ecc8; color: #6b5a00; }
+.lb-table td.friend-cell { text-align: right; white-space: nowrap; }
+/* A person's row: the name and its tags on one line, unlike a game's row. */
+.row .row-main.row-inline { flex-direction: row; align-items: center; }
+.request-row { outline: 1px solid var(--accent); }
+
+/* --- profile (public/js/profile.js and its tabs) --- */
+.profile-page h1 { margin: 24px 0 4px; font-size: 24px; }
+.profile-page .panel { margin: 16px 0; }
+.profile-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 6px 0 0; font-size: 13px; }
+.profile-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 16px 0 4px; border-bottom: 1px solid var(--line); }
+.profile-tabs[hidden], .profile-actions[hidden] { display: none; }
+.profile-tabs a {
+  padding: 8px 14px;
+  color: var(--text-2);
+  font-size: 14px;
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+}
+.profile-tabs a:hover { color: var(--text); }
+.profile-tabs a.current { color: var(--text); font-weight: bold; border-bottom-color: var(--link); }
+
+/* KPI row: headline numbers, not a chart. */
+.stat-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.stat-tile { flex: 1 1 88px; padding: 10px 12px; background: var(--surface-2); border-radius: 6px; }
+.stat-value { font-size: 22px; font-weight: bold; color: var(--text); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat-tile.good .stat-value { color: var(--good); }
+.stat-tile.bad .stat-value { color: var(--bad); }
+.stat-label { margin-top: 2px; font-size: 11px; color: var(--text-muted); }
+
+.stat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.stat-table th, .stat-table td { padding: 6px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+.stat-table th:first-child, .stat-table td:first-child { text-align: left; }
+.stat-table thead th { color: var(--text-muted); font-weight: normal; border-bottom: 1px solid var(--line); }
+
+/* One thin part-to-whole bar. The 2px gaps and the labelled key are a real
+   encoding channel, not decoration: won and lost are a red/green pair. */
+.record-bar { display: flex; gap: 2px; height: 14px; margin-top: 12px; border-radius: 3px; overflow: hidden; }
+.record-seg { min-width: 3px; }
+.record-key { display: flex; flex-wrap: wrap; gap: 12px; margin: 6px 0 4px; font-size: 12px; color: var(--text-2); }
+.record-key-item { display: inline-flex; align-items: center; gap: 5px; }
+.record-key-item i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* The Games tab. Wide on a phone, so it scrolls sideways inside its panel. */
+.table-scroll { overflow-x: auto; }
+.history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.history-table th, .history-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.history-table th { color: var(--text-muted); font-weight: normal; font-size: 12px; }
+.history-table td { white-space: nowrap; }
+.history-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.history-table tbody tr:hover { background: var(--inset); }
+.history-table .seat-chips { flex-wrap: nowrap; }
+.out-win { color: var(--good); font-weight: bold; }
+.out-loss { color: var(--bad); }
+.out-progress { color: var(--warn); }
+.out-neutral { color: var(--text-muted); }
+
+/* --- Customize (public/js/customize.js) --- */
+.scheme-choice { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px; }
+.scheme-opt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px 8px 10px;
+  border: 1px solid var(--field-border); border-radius: 6px;
+  font-size: 13px; color: var(--text-2); cursor: pointer;
+}
+.scheme-opt:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--text); }
+.scheme-opt input { margin: 0; }
+.scheme-swatch { width: 22px; height: 16px; border-radius: 3px; border: 1px solid rgba(128, 128, 128, 0.6); }
+/* A panel on a page, in each scheme's own colours. */
+.scheme-swatch.dark { background: linear-gradient(135deg, #333 50%, #1e1e1e 50%); }
+.scheme-swatch.light { background: linear-gradient(135deg, #fff 50%, #ececec 50%); }
+.settings-msg { font-size: 13px; min-height: 18px; margin: 6px 0 0; }
+.settings-msg.ok { color: var(--good); }
+.settings-msg.bad { color: var(--bad); }

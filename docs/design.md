@@ -21,7 +21,8 @@ rebuilt at boot; tables in the lobby seat up to four people with AI in the
 other seats; turn timers end an absent player's turn and hand the seat to the
 AI after too many misses; the game page plays through the server with chat and
 survives a reload and a server restart. Of the polish (M5), account deletion,
-the leaderboard and replays exist. The sections below describe what exists.
+the leaderboard, replays, profiles with friends, and a Customize page with the
+colour scheme exist. The sections below describe what exists.
 The last section lists what is still ahead.
 
 ## Tech stack
@@ -47,15 +48,21 @@ src/
   game/        rooms.js (live games: engine, seats, persistence), socket.js
                (every Socket.IO event), routes.js (/api/games),
                leaderboard.js (/api/leaderboard)
+  stats/       routes.js (/api/stats: the profile's record)
+  friends/     routes.js (/api/friends)
+  settings/    routes.js (/api/settings: the colour scheme)
   shared/      the engine, served at /js/ ahead of public/ (see "The engine")
                hex.js state.js mapgen.js game.js ai.js snapshot.js settings.js
                actions.js replay.js
 public/
   index.html login.html lobby.html game.html replay.html leaderboard.html
-  terms.html privacy.html
+  profile.html customize.html terms.html privacy.html
   css/         styles.css (every page but the game), game.css (game and replay)
   assets/      terrain and resource PNGs
-  js/          login.js net.js authGuard.js shell.js lobby.js leaderboard.js
+  js/          login.js net.js authGuard.js shell.js theme.js lobby.js
+               leaderboard.js friends.js
+               profile.js stats.js history.js friendsPage.js (the profile)
+               customize.js (the Customize page)
                renderer.js (the canvas map) ui.js (the game page)
                replay-page.js (the replay page)
 tools/         simulate.js — N AI-only games, by hand
@@ -127,8 +134,9 @@ docs/          CLAUDE.md design.md plan.md setup.md
   at it and the games are the other players' record too. So it stays, renamed
   `deleted-<id>` (a name registration can never produce), without a password,
   and deactivated. What is only the person's is deleted in one transaction: the
-  chat they wrote and their sessions; tables they host are cancelled and seats
-  they hold at other tables released. A human seat in a live game refuses the
+  chat they wrote, their friendships and friend requests, their display
+  settings and their sessions; tables they host are cancelled and seats they
+  hold at other tables released. A human seat in a live game refuses the
   deletion: deactivate first, let the clock hand the seat over, then delete (a
   game with no clock never will; its other players can leave it). The command
   shows counts, wants the username typed back, turns on `secure_delete` and
@@ -255,15 +263,19 @@ What is never logged, and where personal data may appear:
 a table that already exists needs `ALTER`, so those go through
 `addColumnIfMissing` in `src/db/index.js`, which runs at every boot and brings
 an older database up to date. A new column on an existing table therefore needs
-a line there, or existing databases never get it. There are no migrations yet.
+a line there, or existing databases never get it. The one migration so far adds
+`users.prefs` (2026-10-11); `test/integration/migrations.prefs.test.js` runs it
+against a database in the shape it had before.
 
-Tables: `users` (id, username, password_hash, created_at, deactivated_at);
+Tables: `users` (id, username, password_hash, created_at, deactivated_at, and
+`prefs`, the display settings as JSON, NULL for the defaults);
 `sessions`, which the session store creates itself; `games` (status, host,
 seed, settings JSON, the snapshot JSON, seq, turn, current seat, deadline,
 winner, timestamps), `game_seats` (one row per seat: open, human or ai, the
 user, the difficulty, missed turns), `game_actions` (every player action in
-order, as JSON, plus the server's `timeout` and `leave` rows) and
-`chat_messages`. The snapshot column is overwritten after every action; it is
+order, as JSON, plus the server's `timeout` and `leave` rows),
+`chat_messages`, and `friendships` (one row per pair, requester to addressee,
+pending until accepted). The snapshot column is overwritten after every action; it is
 what a room is rebuilt from. The action rows are an audit trail and the raw
 material for replays; AI turns are not rows, since they follow
 deterministically from the end of turn that triggered them. Chat is swept
@@ -285,7 +297,9 @@ and every live game, down. The game events are `game:join`, `game:action`,
 "The game on the server" and "Playing together". The module also listens to
 `rooms.events` and does the telling: `game:state` to every socket in a game's
 room with its own view, `lobby:changed` to the lobby room, `turn:yours` to the
-`user:<id>` room of the seat whose turn began.
+`user:<id>` room of the seat whose turn began. One event comes from a REST
+route instead: `src/friends/routes.js` sends `friends:changed` to the
+`user:<id>` rooms of both people after every friendship change.
 
 ## Pages and the shell
 
@@ -293,10 +307,25 @@ room with its own view, `lobby:changed` to the lobby room, `turn:yours` to the
 on success. `index.html` redirects to login. `public/js/shell.js` builds the
 top bar and the left rail on every signed-in page except the game, and
 `authGuard.js` fills the user bar in it; shell loads first so the user bar it
-creates is the one authGuard finds. The stylesheet is dark by default with a
-light scheme behind `<html data-scheme="light">`; nothing sets it yet, and
-there is no settings page. There is no theme customisation: that was
-LorChess's board colours and piece images, which have no counterpart here.
+creates is the one authGuard finds. authGuard also defines `playerLink()`, a
+player's name as a link to their profile, which every list of players uses
+(leaderboard, lobby seats and presence, the profile's tabs). The rail is Play,
+My Profile with its three tabs as sub-items (Stats, My Games, Friends: plain
+links to `profile.html#<tab>`, so any tab is one click away), Customize and
+Leaderboard. On a phone the rail is one scrolling row with no room for
+nesting, so the sub-items hide and the profile page shows its own tab bar.
+
+The stylesheet is dark by default with a light scheme behind
+`<html data-scheme="light">`. `public/js/theme.js` sets it from
+`GET /api/settings`, and loads in `<head>` with a copy of the setting in
+localStorage so the page paints in the right scheme before the answer comes
+back; authGuard removes the copy on logout, so the next person at the browser
+gets the default. `customize.html` (`customize.js`; `/js/settings.js` is the
+engine's catalogue) offers dark or light and saves the choice at once. That is
+all of LorChess's Customize page that was copied: its board colours and
+uploaded images have no counterpart on a map of fixed terrain art. The game
+and replay pages keep their dark map colours (`game.css`) and do not load
+theme.js.
 
 `lobby.html` (`lobby.js`) is the lobby: open tables, a form for a new table,
 the user's games, live games to watch, who is online. `game.html` (`ui.js`,
@@ -317,7 +346,10 @@ these changes, update the page and its date in the same commit: what is
 stored (the account, the session, the games a player takes part in with every
 action and the result, visible to every signed-in player since spectating is
 open, and in-game chat, seen by everyone in the game and deleted
-`CHAT_RETENTION_DAYS` after it ends); what deletion removes and keeps (see
+`CHAT_RETENTION_DAYS` after it ends; friendships and requests, and the colour
+scheme); what a profile shows other players (join date, record, games,
+friends; a request only to its two people); the copy of the scheme kept in
+the browser and removed at logout; what deletion removes and keeps (see
 Authentication); sessions last 7 days
 (`src/auth/session.js`); IPs live in the throttle's memory for
 `AUTH_WINDOW_MS` (15 min) and are written only on the `auth.*` log lines;
@@ -699,9 +731,9 @@ player sees it (the rail, the page title, the "← Play" link on the game and
 replay pages); the code and the URL keep the name lobby. It has a new-game
 form (seat 0 is yours; seats 1–3 are AI with a difficulty each; seed; turn
 time) built from the engine's own catalogues, so it offers exactly what the
-server accepts, and the list of your games with turn, whose turn it is and a
-link to play or view.
-Open seats, presence and watching other people's games come with M3.
+server accepts, and the lists: games where it is your turn, open tables, live
+games to watch, your games, and who is online. A person's name on a seat chip
+or in the online list links to their profile.
 
 ## Playing together: tables, timers, chat
 
@@ -806,8 +838,11 @@ their turns running out until the AI took the seat, is no loss of theirs, and
 they do not make an abandoned game one of two people.
 A win counts for the person who was still playing the seat at the end; a seat
 the AI took over and then won is the person's game but not their win.
-Deactivated and deleted accounts are left off. `leaderboard.html` renders it
-and marks the viewer's row.
+Deactivated and deleted accounts are left off. The rule for which games count
+is one SQL fragment in `queries.js` (`COUNTED`, with `WON`), shared with the
+profile's stats, so the two pages cannot disagree. `leaderboard.html` renders
+it, marks the viewer's row, links each name to its profile and gives every
+other row a friend control.
 
 **Replays.** The engine is deterministic and the server recorded every action
 in order, including its own `timeout` and `leave` rows, so a game's states can
@@ -835,12 +870,67 @@ speeds and the arrow keys. It is linked from every finished or abandoned
 game in the lobby and from the victory screen. The replay page loads `ai.js`;
 the game page does not.
 
+## Profiles and friends
+
+Copied from LorChess's profile without its Achievements tab (not for now), and
+without the Analysis Board and Membership pages, which have no counterpart.
+
+**The profile page.** `profile.html` (`profile.js`) is yours, or with
+`?id=<userId>` anyone's (your own id is still yours). It shows the name and
+the join date, and three tabs in the URL hash, `#stats`, `#games` and
+`#friends`, so each can be linked to. Each tab's script registers a function in
+`window.profileTabs` and `profile.js` runs it the first time the tab opens, so
+the page does not fetch a games list or open a socket nobody looked at. On
+someone else's profile the tabs are read-only and a friend control sits under
+the name. Everything on a profile was already visible to any signed-in player
+(the leaderboard, the games lists, spectating), so profiles are open to every
+signed-in player too; a deactivated or deleted account is a 404, like an
+unknown one.
+
+- **Stats** (`stats.js`, `GET /api/stats` and `/api/stats/:id`,
+  `src/stats/routes.js`): over the games the leaderboard counts (the shared
+  `COUNTED` rule), played, won, lost, abandoned (an abandoned game counted is a
+  loss on the leaderboard; here it is shown apart) and the win rate, as tiles
+  and one part-to-whole bar with a labelled key; games in progress; the same
+  record by civilization (the seat) and by company: AI only, or with other
+  people (`people`, the seats with a user, counts who started the game, since
+  a table's seats are released before the start and a seat the AI took keeps
+  its user). The stats payload also carries the user and `you`, which the
+  header needs, so `profile.js` fetches it once and hands it to the tab.
+- **My Games** (`history.js`): `GET /api/games` for your own, or
+  `GET /api/games/user/:id` for someone else's, the same list with `userSeat`
+  (the owner's seat, whoever plays it now) and `mySeat` (the viewer's, for
+  Play or Watch). Each row: last activity, the civ, every seat as a chip
+  (people link to their profiles; seats carry `userId` for this), the turn, the
+  result from the owner's side (Won, Lost, Left when the AI has the seat,
+  Abandoned, In progress or Your turn, Table) and Play, Watch, Replay or a link
+  to the lobby. The lobby keeps its own "My games" list; this one is the full
+  record on the profile.
+- **Friends** (`friendsPage.js`): requests to you, with Accept and Decline,
+  then your friends (Remove) and the requests you sent (Withdraw). Someone
+  else's tab is only their accepted friends.
+
+**Friends** (`src/friends/routes.js`, `public/js/friends.js`). One
+`friendships` row per pair, pending until the addressee accepts; asking
+someone who already asked you accepts their request. Only the two people a row
+belongs to can see or touch it: the addressee accepts or declines, the sender
+withdraws, either ends a friendship; anyone else gets a 404. A deactivated
+person drops out of every list and their pending request cannot be accepted
+by id; reactivation brings their friendships back. Every change sends
+`friends:changed` to both people's `user:<id>` rooms, a nudge to refetch: the
+REST answer is the truth. `friends.js` is the client and the control (Add
+friend, Requested and Withdraw, Accept and Decline, Friends and Remove) that
+the profile and the leaderboard put next to a player. LorChess's game
+challenges and online badges were not copied: a civ game starts from a table,
+and inviting a friend to one is for later.
+
 ## Decided, not yet built
 
 Left of the plan's polish (M5, `docs/plan.md`): a finished-game summary page
 (the victory screen on the game page serves today), broadcasting after each AI
 civ if the round jump feels wrong, touch and small-screen layout, and deleting
 `civ_lite-old/` and the `lorchess/` reference copy once the game page has been
-checked against the original. Ideas kept for later: fog of war (the per-seat
+checked against the original. From the profile work: inviting a friend into a
+seat of a table you host, and achievements. Ideas kept for later: fog of war (the per-seat
 view function is the hook), simultaneous turns, maps sized to the number of
 players, more civs.

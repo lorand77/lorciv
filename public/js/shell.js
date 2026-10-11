@@ -8,10 +8,22 @@
 // Load it BEFORE authGuard.js. It relocates the page's existing #userbar into
 // the top bar rather than making a second one, so authGuard still finds it by
 // id when its /api/me request comes back.
+//
+// The profile's tabs are listed under My Profile as sub-items, on every page,
+// so any of them is one click away. They are plain links to the tab's hash;
+// profile.js does the switching. On a phone the rail is a single row with no
+// room for nesting, so styles.css hides them there and the profile page keeps
+// its own tab bar.
 
 (function () {
   const ITEMS = [
     { href: "/lobby.html", icon: "⬡", label: "Play" },
+    { href: "/profile.html", icon: "👤", label: "My Profile", children: [
+      { tab: "stats", icon: "📊", label: "Stats" },
+      { tab: "games", icon: "📜", label: "My Games" },
+      { tab: "friends", icon: "👥", label: "Friends" },
+    ] },
+    { href: "/customize.html", icon: "🎨", label: "Customize" },
     { href: "/leaderboard.html", icon: "🏆", label: "Leaderboard" },
   ];
 
@@ -59,15 +71,60 @@
   const rail = el("nav", "app-rail");
   rail.setAttribute("aria-label", "Sections");
   const here = location.pathname.replace(/\/$/, "") || "/lobby.html";
+  // Someone else's profile is not "yours": keep the Profile rail item as a link
+  // back to your own.
+  const someoneElses = here === "/profile.html" && new URLSearchParams(location.search).has("id");
+  let ownProfile = here === "/profile.html" && !someoneElses;
   for (const item of ITEMS) {
-    const current = here === item.href;
+    const current = here === item.href && !(item.children && someoneElses);
     // The page you are on is not a link to itself.
     const node = el(current ? "span" : "a", "rail-item" + (current ? " current" : ""));
     if (current) node.setAttribute("aria-current", "page");
     else node.href = item.href;
+    if (item.children) node.classList.add("rail-parent");
     node.append(el("span", "rail-icon", item.icon), el("span", "rail-label", item.label));
     rail.appendChild(node);
+    // Sub-items stay links even when current: switching tabs only changes the
+    // hash, and swapping elements on every hashchange buys nothing.
+    for (const sub of item.children || []) {
+      const a = el("a", "rail-item rail-sub");
+      a.href = item.href + "#" + sub.tab;
+      a.dataset.tab = sub.tab;
+      a.append(el("span", "rail-icon", sub.icon), el("span", "rail-label", sub.label));
+      rail.appendChild(a);
+    }
   }
+
+  // On your own profile, highlight the open tab. An unknown or empty hash is
+  // the first tab, as in profile.js.
+  function markProfileTab() {
+    if (!ownProfile) return;
+    const subs = rail.querySelectorAll(".rail-sub");
+    const key = location.hash.slice(1);
+    const open = Array.prototype.some.call(subs, (a) => a.dataset.tab === key) ? key : subs[0].dataset.tab;
+    for (const a of subs) {
+      const on = a.dataset.tab === open;
+      a.classList.toggle("current", on);
+      if (on) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    }
+  }
+  markProfileTab();
+  window.addEventListener("hashchange", markProfileTab);
+  // Your own id in the URL is still your own profile. Who you are is only
+  // known once authGuard's request comes back, so the rail corrects itself then.
+  window.addEventListener("user:known", (e) => {
+    if (!someoneElses) return;
+    if (new URLSearchParams(location.search).get("id") !== String(e.detail.id)) return;
+    const link = rail.querySelector('a.rail-item[href="/profile.html"]');
+    if (!link) return;
+    const current = el("span", "rail-item rail-parent current");
+    current.setAttribute("aria-current", "page");
+    current.append(...link.childNodes);
+    link.replaceWith(current);
+    ownProfile = true;
+    markProfileTab();
+  });
   // Terms and privacy, pinned to the bottom of the rail. The pages themselves
   // carry no shell: they must be readable before anyone has an account.
   const legal = el("div", "rail-legal");

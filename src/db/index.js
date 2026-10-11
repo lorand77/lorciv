@@ -45,8 +45,7 @@ try {
 // that already exists needs ALTER, which is not. Apply those here instead, so a
 // database created before a column existed picks it up on the next boot.
 // Returns true when it actually added the column, so a caller can run a
-// one-time backfill alongside it. No migrations yet: every column is in
-// schema.sql. The first one goes right below this function.
+// one-time backfill alongside it.
 function addColumnIfMissing(table, column, definition) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all();
   if (cols.some((c) => c.name === column)) return false;
@@ -54,6 +53,10 @@ function addColumnIfMissing(table, column, definition) {
   log.info("db.migrated", { added: `${table}.${column}` });
   return true;
 }
+
+// 2026-10-11: display settings (the colour scheme). NULL is the defaults, so
+// existing users need no backfill.
+addColumnIfMissing("users", "prefs", "TEXT");
 
 module.exports = db;
 module.exports.addColumnIfMissing = addColumnIfMissing;

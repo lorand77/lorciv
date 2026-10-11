@@ -1,8 +1,9 @@
 "use strict";
 
 // `npm run user:delete`: the account row stays as deleted-<id>, deactivated and
-// without a password; chat and sessions go; tables they host are cancelled and
-// their seats at other tables released; a live seat blocks the deletion.
+// without a password; chat, friendships, display settings and sessions go;
+// tables they host are cancelled and their seats at other tables released; a
+// live seat blocks the deletion.
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -37,7 +38,7 @@ test("refuses while the user holds a seat in a live game, and tells the operator
   assert.equal(queries.getUserById.get(alice.user.id).username, alice.user.username);
 });
 
-test("deletes: name freed, password gone, chat and sessions removed, tables tidied, games kept", async () => {
+test("deletes: name freed, password gone, chat, friends, settings and sessions removed, tables tidied, games kept", async () => {
   const alice = await registerUser(srv.baseUrl, "leaving");
   const bob = await registerUser(srv.baseUrl, "staying");
   // A finished game alice took part in, a table she hosts, a seat at bob's table, some chat.
@@ -48,6 +49,12 @@ test("deletes: name freed, password gone, chat and sessions removed, tables tidi
   assert.equal((await alice.c.post(`/api/games/${bobs}/seats/1/join`)).status, 200);
   db().prepare("INSERT INTO chat_messages (game_id, user_id, text) VALUES (?, ?, 'gg')").run(finished, alice.user.id);
   db().prepare("INSERT INTO chat_messages (game_id, user_id, text) VALUES (?, ?, 'well played')").run(finished, bob.user.id);
+  // A friend, a request she sent, and a scheme of her own.
+  const carol = await registerUser(srv.baseUrl, "asked");
+  const req = await alice.c.post("/api/friends/requests", { toUserId: bob.user.id });
+  assert.equal((await bob.c.post(`/api/friends/requests/${req.body.id}/accept`)).status, 200);
+  assert.equal((await alice.c.post("/api/friends/requests", { toUserId: carol.user.id })).status, 201);
+  assert.equal((await alice.c.put("/api/settings", { scheme: "light" })).status, 200);
 
   const refused = cli(alice.user.username, "something else");
   assert.equal(refused.code, 1);
@@ -58,12 +65,16 @@ test("deletes: name freed, password gone, chat and sessions removed, tables tidi
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /kept, without the name: 1 finished or abandoned game/);
   assert.match(r.out, /cancelled: 1 table\(s\) hosted; released: 1 seat/);
-  assert.match(r.out, /deleted: 1 chat message/);
+  assert.match(r.out, /deleted: 1 chat message\(s\), 2 friendship\(s\) and request\(s\)/);
   assert.match(r.out, new RegExp(`deleted ${alice.user.username}: now deleted-${alice.user.id}`));
 
   const row = db().prepare("SELECT * FROM users WHERE id = ?").get(alice.user.id);
   assert.equal(row.username, `deleted-${alice.user.id}`);
   assert.equal(row.password_hash, null);
+  assert.equal(row.prefs, null, "her settings are gone");
+  assert.equal(db().prepare("SELECT COUNT(*) AS n FROM friendships WHERE ? IN (requester_id, addressee_id)").get(alice.user.id).n, 0);
+  assert.deepEqual((await bob.c.get("/api/friends")).body.friends, [], "she is off her friends' lists");
+  assert.deepEqual((await carol.c.get("/api/friends")).body.incoming, []);
   assert.ok(row.deactivated_at);
   assert.equal((await alice.c.get("/api/me")).status, 401, "sessions are gone");
   assert.equal(db().prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE user_id = ?").get(alice.user.id).n, 0);

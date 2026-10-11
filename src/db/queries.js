@@ -6,6 +6,31 @@
 
 const db = require("./index");
 
+// A seat `s` in a game `g` that counts for the player's record, on the
+// leaderboard and on their profile alike. A finished game counts; so does an
+// abandoned one (aborted after it started) that two or more people played, as
+// a loss for each of them: walking out on other people is not a way to keep a
+// defeat off the board. A solo game abandoned does not count, nor a table
+// cancelled before it started. user_id stays on a seat the AI took over, so
+// those who left are counted.
+//
+// "Played" means made a move: an action row of theirs other than a leave (the
+// server's timeouts have no user). Someone who never moved, whose turns ran
+// out until the AI took the seat, has not played the game, so it is no loss of
+// theirs and does not make an abandoned game one of two.
+const COUNTED = `
+  (g.status = 'finished'
+   OR (g.status = 'aborted' AND g.started_at IS NOT NULL
+       AND (SELECT COUNT(DISTINCT m.user_id) FROM game_actions m
+            WHERE m.game_id = g.id AND m.user_id IS NOT NULL
+              AND json_extract(m.action, '$.type') <> 'leave') >= 2))
+  AND EXISTS (SELECT 1 FROM game_actions m
+              WHERE m.game_id = g.id AND m.user_id = s.user_id
+                AND json_extract(m.action, '$.type') <> 'leave')`;
+// A counted seat that won: a win is the person's only while they still played
+// the seat; one the AI took over and then won is their game but not their win.
+const WON = "g.status = 'finished' AND g.winner_seat = s.seat AND s.kind = 'human'";
+
 module.exports = {
   // --- users ---
   createUser: db.prepare("INSERT INTO users (username, password_hash) VALUES (?, ?)"),
@@ -49,53 +74,53 @@ module.exports = {
       (SELECT COUNT(*) FROM games WHERE host_id = @id AND status = 'lobby') AS tables,
       (SELECT COUNT(*) FROM game_seats s JOIN games g ON g.id = s.game_id
         WHERE s.user_id = @id AND g.status = 'lobby' AND g.host_id != @id) AS tableSeats,
-      (SELECT COUNT(*) FROM chat_messages WHERE user_id = @id) AS chat
+      (SELECT COUNT(*) FROM chat_messages WHERE user_id = @id) AS chat,
+      (SELECT COUNT(*) FROM friendships WHERE requester_id = @id OR addressee_id = @id) AS friendships
   `),
   deleteChatOf: db.prepare("DELETE FROM chat_messages WHERE user_id = @id"),
+  deleteFriendshipsOf: db.prepare("DELETE FROM friendships WHERE requester_id = @id OR addressee_id = @id"),
   // The row itself stays, because seats and action rows point at it and are
   // the other players' record too. Registration allows only [A-Za-z0-9_], so
   // nobody can ever register a `deleted-<id>` name.
   scrubDeletedUser: db.prepare(`
     UPDATE users
-       SET username = 'deleted-' || id, password_hash = NULL,
+       SET username = 'deleted-' || id, password_hash = NULL, prefs = NULL,
            deactivated_at = COALESCE(deactivated_at, datetime('now'))
      WHERE id = @id
   `),
 
   // --- leaderboard (src/game/leaderboard.js) ---
-  // Every active account with a seat in a counted game: games played, and
-  // games won while still playing the seat (a seat the AI took over and then
-  // won is not the person's win). Top 100 by wins. A finished game counts; so
-  // does an abandoned one (aborted after it started) that two or more people
-  // played, as a loss for each of them: walking out on other people is not a
-  // way to keep a defeat off the board. A solo game abandoned does not count,
-  // nor a table cancelled before it started. user_id stays on a seat the AI
-  // took over, so those who left are counted.
-  //
-  // "Played" means made a move: an action row of theirs other than a leave
-  // (the server's timeouts have no user). Someone who never moved, whose
-  // turns ran out until the AI took the seat, has not played the game, so it
-  // is no loss of theirs and does not make an abandoned game one of two.
+  // Every active account with a seat in a counted game (COUNTED, above):
+  // games played and games won, top 100 by wins.
   leaderboard: db.prepare(`
     SELECT u.id, u.username,
            COUNT(*) AS games,
-           SUM(CASE WHEN g.status = 'finished' AND g.winner_seat = s.seat AND s.kind = 'human' THEN 1 ELSE 0 END) AS wins
+           SUM(CASE WHEN ${WON} THEN 1 ELSE 0 END) AS wins
     FROM users u
     JOIN game_seats s ON s.user_id = u.id
-    JOIN games g ON g.id = s.game_id AND (
-      g.status = 'finished'
-      OR (g.status = 'aborted' AND g.started_at IS NOT NULL
-          AND (SELECT COUNT(DISTINCT m.user_id) FROM game_actions m
-               WHERE m.game_id = g.id AND m.user_id IS NOT NULL
-                 AND json_extract(m.action, '$.type') <> 'leave') >= 2)
-    )
-    WHERE u.deactivated_at IS NULL
-      AND EXISTS (SELECT 1 FROM game_actions m
-                  WHERE m.game_id = g.id AND m.user_id = u.id
-                    AND json_extract(m.action, '$.type') <> 'leave')
+    JOIN games g ON g.id = s.game_id
+    WHERE u.deactivated_at IS NULL AND ${COUNTED}
     GROUP BY u.id
     ORDER BY wins DESC, games ASC, u.username COLLATE NOCASE ASC
     LIMIT 100
+  `),
+
+  // --- profile stats (src/stats/routes.js) ---
+  // One row per counted game of the user (the same games the leaderboard
+  // counts): the seat, whether it won, how the game ended, and how many people
+  // sat down in it. A seat keeps its user_id when the AI takes it over, and a
+  // table's seats are released before it starts, so `people` is the number
+  // who started the game.
+  statsGames: db.prepare(`
+    SELECT s.seat, g.status, CASE WHEN ${WON} THEN 1 ELSE 0 END AS won,
+           (SELECT COUNT(*) FROM game_seats o WHERE o.game_id = g.id AND o.user_id IS NOT NULL) AS people
+    FROM game_seats s JOIN games g ON g.id = s.game_id
+    WHERE s.user_id = ? AND ${COUNTED}
+  `),
+  // Games the user is playing right now (a seat still theirs, not the AI's).
+  statsInProgress: db.prepare(`
+    SELECT COUNT(*) AS n FROM game_seats s JOIN games g ON g.id = s.game_id
+    WHERE s.user_id = ? AND s.kind = 'human' AND g.status = 'active'
   `),
 
   // --- games (src/game/rooms.js, src/game/routes.js) ---
@@ -154,11 +179,12 @@ module.exports = {
     FROM game_seats s LEFT JOIN users u ON u.id = s.user_id
     WHERE s.game_id = ? ORDER BY s.seat
   `),
-  // The games a user holds a seat in, newest activity first.
-  // my_seat only while the user still plays it: a seat handed to the AI keeps
-  // its user_id, so the game stays listed, but it is to watch now.
+  // The games a user holds a seat in, newest activity first. user_seat is
+  // their seat; my_seat the same, but only while the user still plays it: a
+  // seat handed to the AI keeps its user_id, so the game stays listed, but it
+  // is to watch now.
   listGamesForUser: db.prepare(`
-    SELECT g.*, CASE WHEN s.kind = 'human' THEN s.seat END AS my_seat
+    SELECT g.*, s.seat AS user_seat, CASE WHEN s.kind = 'human' THEN s.seat END AS my_seat
     FROM games g JOIN game_seats s ON s.game_id = g.id AND s.user_id = ?
     ORDER BY g.updated_at DESC, g.id DESC
   `),
@@ -175,6 +201,35 @@ module.exports = {
   listActions: db.prepare(
     "SELECT seq, seat, user_id, action, created_at FROM game_actions WHERE game_id = ? ORDER BY seq"
   ),
+
+  // --- friendships (src/friends/routes.js) ---
+  // The row between two users, whichever of them asked.
+  findFriendship: db.prepare(`
+    SELECT * FROM friendships
+    WHERE (requester_id = @a AND addressee_id = @b) OR (requester_id = @b AND addressee_id = @a)
+  `),
+  getFriendshipById: db.prepare("SELECT * FROM friendships WHERE id = ?"),
+  createFriendRequest: db.prepare("INSERT INTO friendships (requester_id, addressee_id) VALUES (?, ?)"),
+  acceptFriendRequest: db.prepare(`
+    UPDATE friendships SET status = 'accepted', responded_at = datetime('now')
+    WHERE id = ? AND status = 'pending'
+  `),
+  deleteFriendship: db.prepare("DELETE FROM friendships WHERE id = ?"),
+  // Every friendship and request of a user, with the other person; friends
+  // first, then by name. A deactivated or deleted person is left out, and
+  // comes back with their friendships if the account is reactivated.
+  listFriendshipsForUser: db.prepare(`
+    SELECT f.id, f.status, f.created_at, f.responded_at, f.requester_id, f.addressee_id,
+           u.id AS other_id, u.username AS other_username
+    FROM friendships f
+    JOIN users u ON u.id = CASE WHEN f.requester_id = @me THEN f.addressee_id ELSE f.requester_id END
+    WHERE (f.requester_id = @me OR f.addressee_id = @me) AND u.deactivated_at IS NULL
+    ORDER BY f.status = 'accepted' DESC, u.username COLLATE NOCASE
+  `),
+
+  // --- display settings (src/settings/routes.js) ---
+  getUserPrefs: db.prepare("SELECT prefs FROM users WHERE id = ?"),
+  setUserPrefs: db.prepare("UPDATE users SET prefs = ? WHERE id = ?"),
 
   // --- chat ---
   insertChat: db.prepare("INSERT INTO chat_messages (game_id, user_id, text) VALUES (?, ?, ?)"),

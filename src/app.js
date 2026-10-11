@@ -14,6 +14,9 @@ const { requireSameOrigin } = require("./auth/origin");
 const authRoutes = require("./auth/routes");
 const gameRoutes = require("./game/routes");
 const leaderboardRoutes = require("./game/leaderboard");
+const statsRoutes = require("./stats/routes");
+const friendRoutes = require("./friends/routes");
+const settingsRoutes = require("./settings/routes");
 const { attachSockets } = require("./game/socket");
 const rooms = require("./game/rooms");
 
@@ -83,6 +86,9 @@ function createServer() {
   api("/api", authRoutes);
   api("/api/games", gameRoutes);
   api("/api/leaderboard", leaderboardRoutes);
+  api("/api/stats", statsRoutes);
+  api("/api/friends", friendRoutes);
+  api("/api/settings", settingsRoutes);
 
   // --- Static assets ---
   // One copy of the game engine, in src/shared, served at /js/*. Mounted before

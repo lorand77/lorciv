@@ -40,8 +40,13 @@ under `src/game/` or `src/shared/`.
   `renderer.js` (the canvas map), `game.css`. `lobby.html`/`lobby.js` is the
   lobby: tables, seats, your games, live games, presence. `replay.html`/
   `replay-page.js` rebuilds a game from its actions; `leaderboard.html`/
-  `leaderboard.js` ranks players. `public/assets/` holds the terrain and
-  resource images.
+  `leaderboard.js` ranks players. `profile.html` is the profile: `profile.js`
+  runs the tabs `stats.js`, `history.js` (My Games) and `friendsPage.js`;
+  `friends.js` is the friends client and control. `customize.html`/
+  `customize.js` sets the colour scheme, which `theme.js` applies on every
+  page with the shell. A page script must not share a name with a file in
+  `src/shared/`, which is served at `/js/` first. `public/assets/` holds the
+  terrain and resource images.
 - `src/db/retention.js` — the chat sweep, started by `server.js` only.
 - `scripts/backup.sh` — the nightly database backup to B2, run by cron on the
   server (see `docs/setup.md`).

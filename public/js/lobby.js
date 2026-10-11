@@ -141,7 +141,8 @@
     const wrap = el("span", "seat-chips");
     for (const s of g.seats) {
       const chip = el("span", "chip " + s.kind);
-      chip.append(swatch(s.seat), el("span", null, who(s)));
+      // A person's name links to their profile.
+      chip.append(swatch(s.seat), s.kind === "human" && s.userId != null ? playerLink(s.userId, s.username) : el("span", null, who(s)));
       if (s.kind === "human" && s.seat === g.mySeat) chip.classList.add("me");
       if (s.kind === "open" && canJoin) {
         const b = el("button", "chip-btn", "Join");
@@ -253,7 +254,7 @@
     $("online-count").textContent = users.length ? `(${users.length})` : "";
     for (const u of users) {
       const row = el("div", "row small");
-      row.appendChild(el("span", "name", u.username));
+      row.appendChild(playerLink(u.userId, u.username, { cls: "name player-link" }));
       list.appendChild(row);
     }
   }

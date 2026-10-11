@@ -47,7 +47,7 @@ function seatsFromRows(rows) {
 
 function seatView(s) {
   return {
-    seat: s.seat, kind: s.kind, username: s.username, difficulty: s.difficulty,
+    seat: s.seat, kind: s.kind, userId: s.userId, username: s.username, difficulty: s.difficulty,
     missedTurns: s.missedTurns, civ: PLAYER_NAMES[s.seat],
   };
 }

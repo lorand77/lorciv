@@ -2,8 +2,9 @@
 
 // `npm run user:deactivate -- <username>` / `npm run user:reactivate -- <username>`
 // — take an account out of the site, or bring it back (ops use; there is no
-// admin UI). A deactivated user cannot log in and is shown nowhere. Nothing is
-// deleted: game history keeps their name, and reactivating restores everything.
+// admin UI). A deactivated user cannot log in and is shown nowhere: not on the
+// leaderboard, in friends lists or as a profile. Nothing is deleted: game
+// history keeps their name, and reactivating restores everything, friends too.
 //
 // Deactivating also deletes the user's sessions, so every open tab is logged
 // out on its next request. Sockets live in the server process, out of reach

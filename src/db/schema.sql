@@ -16,7 +16,10 @@ CREATE TABLE IF NOT EXISTS users (
   -- Set by `npm run user:deactivate`: no login, nothing visible. NULL = active.
   -- The row stays so game history keeps its names and reactivating restores
   -- everything.
-  deactivated_at TEXT
+  deactivated_at TEXT,
+  -- JSON: the user's display settings (src/settings/routes.js), NULL for the
+  -- defaults. Added after launch: src/db/index.js adds it to older databases.
+  prefs          TEXT
 );
 
 -- A game: who sits where, its settings, and the engine's latest state as one
@@ -71,6 +74,22 @@ CREATE TABLE IF NOT EXISTS game_actions (
   created_at TEXT    NOT NULL DEFAULT (datetime('now')),
   UNIQUE (game_id, seq)
 );
+
+-- Friendships. One row per pair: requester -> addressee, 'pending' until the
+-- addressee accepts. src/friends/routes.js checks both directions before
+-- inserting, so a pair never has two rows.
+CREATE TABLE IF NOT EXISTS friendships (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  requester_id INTEGER NOT NULL REFERENCES users(id),
+  addressee_id INTEGER NOT NULL REFERENCES users(id),
+  status       TEXT    NOT NULL DEFAULT 'pending'
+                       CHECK (status IN ('pending', 'accepted')),
+  created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+  responded_at TEXT,
+  UNIQUE (requester_id, addressee_id),
+  CHECK (requester_id <> addressee_id)
+);
+CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships (addressee_id);
 
 -- In-game chat, one room per game for players and spectators alike. Kept so
 -- the people in a game can talk; swept CHAT_RETENTION_DAYS after the game

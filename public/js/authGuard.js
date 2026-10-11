@@ -8,6 +8,22 @@
 // Note: this is a UX redirect, not a security boundary. All privileged actions
 // are enforced server-side (requireAuth on the API, and authoritative socket
 // checks). The page may flash briefly before the redirect — acceptable.
+//
+// It also defines playerLink(), the link to a player's profile that every page
+// listing players uses.
+
+// A player's name as a link to their profile. Your own name goes to your own
+// profile, so the rail marks it as yours.
+window.playerLink = function (userId, username, opts) {
+  const o = opts || {};
+  const a = document.createElement("a");
+  a.className = o.cls == null ? "player-link" : o.cls;
+  a.textContent = username;
+  const mine = window.currentUser && window.currentUser.id === Number(userId);
+  a.href = mine ? "/profile.html" : "/profile.html?id=" + encodeURIComponent(userId);
+  a.title = "View profile";
+  return a;
+};
 
 (function () {
   // Only a 401 means "not signed in". Anything else — the server restarting,
@@ -63,6 +79,9 @@
     logout.addEventListener("click", async () => {
       logout.disabled = true;
       await fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+      // The next person at this browser gets the default scheme, not this
+      // user's (theme.js keeps a copy for painting before /api/settings).
+      try { localStorage.removeItem("lorciv.theme"); } catch (e) { /* storage blocked */ }
       location.href = "/login.html";
     });
     bar.append(who, logout);

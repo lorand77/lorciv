@@ -88,9 +88,25 @@ router.post("/", (req, res) => {
 });
 
 // The games and tables the user holds a seat in, newest activity first.
+// `userSeat` is their seat whoever plays it now; `mySeat` only while they do.
 router.get("/", (req, res) => {
   const rows = queries.listGamesForUser.all(req.session.userId);
-  return res.json(rows.map((row) => ({ ...rooms.summary(row), mySeat: row.my_seat })));
+  return res.json(rows.map((row) => ({ ...rooms.summary(row), userSeat: row.user_seat, mySeat: row.my_seat })));
+});
+
+// Someone else's games, for the Games tab of their profile: the same list, with
+// `userSeat` theirs and `mySeat` the viewer's, for Play or Watch. Nothing here
+// is private: spectating is open and tables are listed in the lobby.
+router.get("/user/:id", (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "Bad user id." });
+  if (!queries.getActiveUserById.get(id)) return res.status(404).json({ error: "No such player." });
+  const me = req.session.userId;
+  return res.json(queries.listGamesForUser.all(id).map((row) => {
+    const game = rooms.summary(row);
+    const mine = game.seats.find((s) => s.kind === "human" && s.userId === me);
+    return { ...game, userSeat: row.user_seat, mySeat: mine ? mine.seat : null };
+  }));
 });
 
 // Tables with an open seat.

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LorCiv — Profile</title>
+<link rel="stylesheet" href="/css/styles.css">
+<script src="/js/theme.js"></script>
+</head>
+<body>
+<div class="page profile-page">
+  <h1 id="profile-name">Profile</h1>
+  <p class="muted small" id="profile-meta"></p>
+  <!-- Someone else's profile only: a friend control. -->
+  <p class="profile-actions" id="profile-actions" hidden></p>
+  <p class="form-error" id="profile-error"></p>
+
+  <!-- Tabs are #stats / #games / #friends, so each one can be linked to. On
+       someone else's profile, Games and Friends are read-only. On your own,
+       the rail lists the tabs and this bar shows only on phones. -->
+  <nav class="profile-tabs" id="profile-tabs" role="tablist" hidden>
+    <a href="#stats" data-tab="stats" role="tab">📊 Stats</a>
+    <a href="#games" data-tab="games" role="tab">📜 <span data-you="My Games" data-them="Games">My Games</span></a>
+    <a href="#friends" data-tab="friends" role="tab">👥 Friends</a>
+  </nav>
+
+  <section class="profile-tab" id="tab-stats" role="tabpanel" hidden>
+    <section class="panel">
+      <h2>Record</h2>
+      <div class="stat-row" id="record-stats"></div>
+      <div id="record-bar"></div>
+      <p class="muted small">The games the leaderboard counts: finished games, and abandoned games
+      that two or more people played, which count as a loss for each of them. A game
+      <span data-you="you" data-them="they">you</span> never made a move in does not count.</p>
+    </section>
+
+    <section class="panel">
+      <h2>By civilization</h2>
+      <table class="stat-table">
+        <thead><tr><th>Civ</th><th>Played</th><th>Won</th><th>Lost</th><th>Abandoned</th><th>Win rate</th></tr></thead>
+        <tbody id="civ-rows"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>By company</h2>
+      <table class="stat-table">
+        <thead><tr><th>Against</th><th>Played</th><th>Won</th><th>Lost</th><th>Abandoned</th><th>Win rate</th></tr></thead>
+        <tbody id="company-rows"></tbody>
+      </table>
+    </section>
+  </section>
+
+  <section class="profile-tab" id="tab-games" role="tabpanel" hidden>
+    <section class="panel">
+      <div id="history-content"><p class="muted">Loading…</p></div>
+    </section>
+  </section>
+
+  <section class="profile-tab" id="tab-friends" role="tabpanel" hidden>
+    <section class="panel">
+      <!-- Your own friends only: requests to answer. A visitor sees just the
+           list below. -->
+      <div id="friends-own" hidden>
+        <p class="muted small">Add friends from the <a href="/leaderboard.html">leaderboard</a>
+        or from a player's profile.</p>
+        <p id="friends-error" class="form-error"></p>
+        <div id="friend-requests" class="list"></div>
+      </div>
+      <div id="friend-list" class="list"></div>
+    </section>
+  </section>
+</div>
+
+<!-- Each tab script registers itself in window.profileTabs; profile.js, last,
+     runs one the first time its tab is opened. game.js gives the civ names and
+     colours. -->
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/hex.js"></script>
+<script src="/js/state.js"></script>
+<script src="/js/mapgen.js"></script>
+<script src="/js/game.js"></script>
+<script src="/js/net.js"></script>
+<script src="/js/shell.js"></script>
+<script src="/js/authGuard.js"></script>
+<script src="/js/friends.js"></script>
+<script src="/js/stats.js"></script>
+<script src="/js/history.js"></script>
+<script src="/js/friendsPage.js"></script>
+<script src="/js/profile.js"></script>
+</body>
+</html>

@@ -845,8 +845,10 @@ function renderUnitPanel(unit, civ) {
                 && (tile.terrain === 'grassland' || tile.terrain === 'plains');
             if (!terrainOk && !goldMineOk) continue;
             if (key === 'pasture' && tile?.resource !== 'horses') continue;
-            const needsTech = imp.requires_tech && !civ.techsResearched.has(imp.requires_tech);
-            addBtn(`Build ${imp.name}`, { type: 'buildImprovement', unitId: unit.id, key }, '', needsTech);
+            // The engine's own rule (tech, own land, no city, not there yet),
+            // so the button offers what the server accepts.
+            const [can] = game.canImprove(unit, key);
+            addBtn(`Build ${imp.name}`, { type: 'buildImprovement', unitId: unit.id, key }, '', !can);
         }
     }
 

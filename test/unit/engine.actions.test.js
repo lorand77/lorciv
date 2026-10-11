@@ -7,7 +7,7 @@
 const { describe, test, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const { Game } = require("../../src/shared/game");
-const { Unit, getReachableTiles } = require("../../src/shared/state");
+const { Unit, getReachableTiles, IMPROVEMENT_DEFS } = require("../../src/shared/state");
 const { runCpuTurns } = require("../../src/shared/ai");
 const { applyAction } = require("../../src/shared/actions");
 
@@ -109,10 +109,17 @@ describe("applyAction", () => {
     assert.equal(applyAction(g, 0, { type: "skip", unitId: worker.id }).error, "illegal");
   });
 
-  test("buildImprovement: a worker, a known improvement, the right terrain", () => {
+  test("buildImprovement: a worker, a known improvement, the right terrain, not an enemy's land", () => {
     const worker = unitOf(g, 0, "worker");
     g.civs[0].techsResearched.add("mining");
-    const terrain = g.tiles.get(`${worker.q},${worker.r}`).terrain;
+    const here = g.tiles.get(`${worker.q},${worker.r}`);
+    const terrain = here.terrain;
+    const guess = ["grassland", "plains"].includes(terrain) ? "farm" : "mine";
+    assert.equal(here.owner, null);
+    assert.deepEqual(g.canImprove(worker, guess), [true, ""], "nobody's land will do");
+    // Founding the capital next door claims the worker's tile.
+    assert.equal(applyAction(g, 0, { type: "foundCity", unitId: unitOf(g, 0, "settler").id }).ok, true);
+    assert.equal(here.owner, 0);
     const key = ["grassland", "plains"].includes(terrain) ? "farm" : "mine";
     const wrong = key === "farm" ? "mine" : "farm";
     assert.equal(applyAction(g, 0, { type: "buildImprovement", unitId: worker.id, key: "castle" }).message, "Unknown improvement.");
@@ -121,6 +128,20 @@ describe("applyAction", () => {
     assert.equal(applyAction(g, 0, { type: "buildImprovement", unitId: worker.id, key }).ok, true);
     assert.equal(worker.buildingImprovement, key);
     assert.equal(worker.movesLeft, 0);
+
+    // Not over the same improvement, not on a city, not on someone else's land.
+    here.improvement = key;
+    worker.movesLeft = 2;
+    worker.buildingImprovement = null;
+    assert.deepEqual(g.canImprove(worker, key), [false, `There is a ${IMPROVEMENT_DEFS[key].name} here already.`]);
+    here.improvement = null;
+    here.owner = 1;
+    assert.deepEqual(g.canImprove(worker, key), [false, "Not on another civ's land."]);
+    here.owner = 0;
+    const city = g.civs[0].cities[0];
+    const cityTile = g.tiles.get(`${city.q},${city.r}`);
+    const builder = new Unit({ id: g.nextId++, unitType: "worker", owner: 0, q: city.q, r: city.r });
+    assert.equal(g.canImprove(builder, cityTile.terrain === "hills" ? "mine" : "farm")[1], "Not on a city.");
   });
 
   test("attack: only an attackable target", () => {

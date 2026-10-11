@@ -446,17 +446,12 @@ function _actWorker(game, civ, worker) {
         const goldMineOk = key === 'mine' && tile.resource === 'gold' &&
             (tile.terrain === 'grassland' || tile.terrain === 'plains');
         if (!terrainOk && !goldMineOk) continue;
-        if (key === 'pasture' && tile.resource !== 'horses') continue;
-        if (tile.improvement === key) continue;
-        if (defn.requires_tech && !civ.techsResearched.has(defn.requires_tech)) continue;
+        if (!game.canImprove(worker, key)[0]) continue; // own land, no city, tech, not there yet
         const gain = Object.values(defn.yield_bonus).reduce((a, b) => a + b, 0);
         if (gain > bestGain) { bestGain = gain; bestImp = key; }
     }
 
-    if (bestImp) {
-        game.startImprovement(worker, bestImp);
-        return;
-    }
+    if (bestImp && game.startImprovement(worker, bestImp)) return;
 
     const reachable = getReachableTiles(worker, game.tiles, game.turn);
     for (const [key, cost] of reachable) {

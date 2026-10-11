@@ -136,3 +136,34 @@ describe("difficulty", () => {
     assert.equal(civs[2].prodMult, 1.5);
   });
 });
+
+describe("seeds and seats as the lists show them", () => {
+  test("a seed outside 0..4294967295, or not a whole number, is refused rather than wrapped", async () => {
+    const { c } = await registerUser(srv.baseUrl, "seeder");
+    for (const seed of [4294967296, 1e300, -1, 1.5, "5", true]) {
+      const res = await c.post("/api/games", { seats: SEATS, seed });
+      assert.equal(res.status, 400, String(seed));
+      assert.match(res.body.error, /seed is a whole number/);
+    }
+    const top = await c.post("/api/games", { seats: SEATS, seed: 4294967295 });
+    assert.equal(top.status, 201);
+    assert.equal(db().prepare("SELECT seed FROM games WHERE id = ?").get(top.body.id).seed, 4294967295);
+    assert.equal((await c.post("/api/games", { seats: SEATS, seed: null })).status, 201, "null: the server draws one");
+  });
+
+  test("a game you left is still in your list, to watch: no seat of yours, and among live games", async () => {
+    const rooms = require("../../src/game/rooms");
+    const { c: host } = await registerUser(srv.baseUrl, "stays");
+    const { c: guest, user } = await registerUser(srv.baseUrl, "goes");
+    const id = (await host.post("/api/games", { seats: [{ kind: "human" }, { kind: "open" }, AI, AI] })).body.id;
+    assert.equal((await guest.post(`/api/games/${id}/seats/1/join`)).status, 200);
+    assert.equal((await host.post(`/api/games/${id}/start`)).status, 200);
+    assert.equal((await guest.get("/api/games")).body.find((g) => g.id === id).mySeat, 1);
+
+    assert.equal(rooms.leaveGame(rooms.getRoom(id), user.id).ok, true);
+    const mine = (await guest.get("/api/games")).body.find((g) => g.id === id);
+    assert.ok(mine, "still listed");
+    assert.equal(mine.mySeat, null);
+    assert.equal((await guest.get("/api/games/live")).body.find((g) => g.id === id).mySeat, null);
+  });
+});

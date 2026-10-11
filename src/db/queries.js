@@ -136,8 +136,10 @@ module.exports = {
     WHERE s.game_id = ? ORDER BY s.seat
   `),
   // The games a user holds a seat in, newest activity first.
+  // my_seat only while the user still plays it: a seat handed to the AI keeps
+  // its user_id, so the game stays listed, but it is to watch now.
   listGamesForUser: db.prepare(`
-    SELECT g.*, s.seat AS my_seat
+    SELECT g.*, CASE WHEN s.kind = 'human' THEN s.seat END AS my_seat
     FROM games g JOIN game_seats s ON s.game_id = g.id AND s.user_id = ?
     ORDER BY g.updated_at DESC, g.id DESC
   `),

@@ -46,11 +46,13 @@ function calcDamage(attackerStr, defenderStr) {
     return Math.max(1, Math.min(50, Math.trunc(damage)));
 }
 
-function effectiveStrength(unit, tile, vsUnitType = null) {
+// `attacking`: terrain and fortification are defensive. A unit attacking out
+// of hills or a fortified position gets neither; the original gave both.
+function effectiveStrength(unit, tile, vsUnitType = null, attacking = false) {
     const defn         = UNIT_DEFS[unit.unitType];
     const base         = defn.strength;
-    const terrainBonus = TERRAIN_DEFENSE_BONUS[tile.terrain] ?? 0;
-    const fortifyBonus = unit.fortifyBonus;
+    const terrainBonus = attacking ? 0 : (TERRAIN_DEFENSE_BONUS[tile.terrain] ?? 0);
+    const fortifyBonus = attacking ? 0 : unit.fortifyBonus;
     const hpModifier   = 0.5 + 0.5 * (unit.hp / unit.hpMax);
     const unitBonus    = vsUnitType ? (defn.bonus_vs?.[vsUnitType] ?? 0) : 0;
     const xpBonus      = unit.xp / 100;
@@ -65,7 +67,7 @@ function cityCombatStrength(city) {
 }
 
 function meleeAttack(attacker, defender, attackerTile, defenderTile) {
-    const aStr       = effectiveStrength(attacker, attackerTile, defender.unitType);
+    const aStr       = effectiveStrength(attacker, attackerTile, defender.unitType, true);
     const dStr       = effectiveStrength(defender, defenderTile, attacker.unitType);
     const attackerDmg = calcDamage(dStr, aStr);
     const defenderDmg = calcDamage(aStr, dStr);
@@ -78,7 +80,7 @@ function rangedAttack(attacker, defender, defenderTile, attackerTile = null) {
     const defn = UNIT_DEFS[attacker.unitType];
     let aStr;
     if (attackerTile) {
-        const baseMultiplier = effectiveStrength(attacker, attackerTile) / defn.strength;
+        const baseMultiplier = effectiveStrength(attacker, attackerTile, null, true) / defn.strength;
         aStr = (defn.ranged_strength ?? defn.strength) * baseMultiplier;
     } else {
         aStr = defn.ranged_strength ?? defn.strength;
@@ -94,7 +96,7 @@ function bombardCity(attacker, city, attackerTile = null) {
     const cityBonus = defn.bonus_vs_city ?? 0;
     let aStr;
     if (attackerTile) {
-        const baseMultiplier = effectiveStrength(attacker, attackerTile) / defn.strength;
+        const baseMultiplier = effectiveStrength(attacker, attackerTile, null, true) / defn.strength;
         aStr = (defn.ranged_strength ?? defn.strength) * baseMultiplier;
     } else {
         aStr = defn.ranged_strength ?? defn.strength;
@@ -107,7 +109,7 @@ function bombardCity(attacker, city, attackerTile = null) {
     if (defn.type === 'melee') {
         const cStr    = cityCombatStrength(city);
         const aEffStr = attackerTile
-            ? effectiveStrength(attacker, attackerTile)
+            ? effectiveStrength(attacker, attackerTile, null, true)
             : defn.strength * (0.5 + 0.5 * (attacker.hp / defn.hp_max));
         attackerDmg = calcDamage(cStr, aEffStr);
         attacker.hp = Math.max(0, attacker.hp - attackerDmg);
@@ -231,16 +233,25 @@ function _completeItem(city, civ, game, itemKey) {
     }
 }
 
+// Production is never thrown away: a city with nothing queued banks it, and
+// changing what is built keeps it (setProduction), as the AI's queue always
+// did.
 function processProduction(city, civ, game) {
-    if (!city.productionQueue.length) return null;
-
     const yields  = computeCityYields(city, game.tiles, civ);
     city.productionProgress += yields.prod;
+    if (!city.productionQueue.length) return null;
 
     const itemKey = city.productionQueue[0];
     const cost    = getItemCost(itemKey);
 
     if (city.productionProgress >= cost) {
+        // A unit needing a resource the civ has lost since it was queued is
+        // dropped; its production stays for the next item.
+        const res = UNIT_DEFS[itemKey]?.requires_resource;
+        if (res && !game.canProduce(city, itemKey)[0]) {
+            city.productionQueue.shift();
+            return `${city.name}: no ${res} left to train a ${UNIT_DEFS[itemKey].name}; its production is kept.`;
+        }
         // A finished unit with nowhere to stand waits, progress kept, until
         // the city or a neighbour frees up.
         if (UNIT_DEFS[itemKey] && !unitSpawnTile(game, city, itemKey)) {
@@ -372,18 +383,54 @@ class Game {
             if ((tile.terrain === 'grassland' || tile.terrain === 'plains') && farEnough(tile.q, tile.r))
                 candidates.push([tile.q, tile.r]);
         }
+        const start = this._drawStart(candidates);
+        if (start) return start;
 
         // Fallback: any passable tile in quadrant
-        if (!candidates.length) {
-            for (const tile of this.tiles.values()) {
-                if (!inQuadrant(tile.q, tile.r)) continue;
-                if (TERRAIN_PASSABLE[tile.terrain] && farEnough(tile.q, tile.r))
-                    candidates.push([tile.q, tile.r]);
+        const fallback = [];
+        for (const tile of this.tiles.values()) {
+            if (!inQuadrant(tile.q, tile.r)) continue;
+            if (TERRAIN_PASSABLE[tile.terrain] && farEnough(tile.q, tile.r))
+                fallback.push([tile.q, tile.r]);
+        }
+        return this._drawStart(fallback);
+    }
+
+    // One candidate drawn at random, as the original did, but never one a civ
+    // could not play from: drawn again without it until a start has room. A
+    // good first draw is kept as it is, so only the rare stranded map (a start
+    // on a one-tile island, where the worker and warrior overwrote the
+    // settler) comes out differently.
+    _drawStart(candidates) {
+        const left = [...candidates];
+        while (left.length) {
+            const i = this._rng.randInt(left.length);
+            if (this._roomyStart(left[i][0], left[i][1])) return left[i];
+            left.splice(i, 1);
+        }
+        return null;
+    }
+
+    // Room to start: a passable neighbour for the worker (the warrior can
+    // share the settler's tile; the worker cannot) and enough connected land
+    // to found cities on.
+    _roomyStart(q, r) {
+        const MIN_LAND = 20;
+        const passable = (k) => { const t = this.tiles.get(k); return t && TERRAIN_PASSABLE[t.terrain]; };
+        const around = hexNeighbors(q, r).filter(([nq, nr]) => passable(`${nq},${nr}`));
+        if (!around.length) return false;
+        const seen = new Set([`${q},${r}`]);
+        const queue = [[q, r]];
+        while (queue.length && seen.size < MIN_LAND) {
+            const [cq, cr] = queue.shift();
+            for (const [nq, nr] of hexNeighbors(cq, cr)) {
+                const k = `${nq},${nr}`;
+                if (seen.has(k) || !passable(k)) continue;
+                seen.add(k);
+                queue.push([nq, nr]);
             }
         }
-
-        if (!candidates.length) return null;
-        return candidates[this._rng.randInt(candidates.length)];
+        return seen.size >= MIN_LAND;
     }
 
     _placeUnit(unit) {
@@ -587,17 +634,32 @@ class Game {
         return [true, msg ?? ''];
     }
 
-    startImprovement(unit, improvementKey) {
+    // Whether a worker may start this improvement where it stands, as
+    // [ok, why]: the right terrain (or gold, for a mine), horses for a pasture,
+    // the tech, not another civ's land (its own or nobody's will do), no city
+    // on the tile, and not the improvement that is there already. The server, the AI and the game
+    // page's buttons all ask this.
+    canImprove(unit, improvementKey) {
         const defn  = IMPROVEMENT_DEFS[improvementKey];
         const tile  = this.tiles.get(`${unit.q},${unit.r}`);
-        if (!tile) return false;
+        if (!defn || !tile) return [false, 'Cannot build that here.'];
         const terrainOk   = defn.valid_terrain.includes(tile.terrain);
         const goldMineOk  = improvementKey === 'mine' && tile.resource === 'gold'
                             && (tile.terrain === 'grassland' || tile.terrain === 'plains');
-        if (!terrainOk && !goldMineOk) return false;
-        if (improvementKey === 'pasture' && tile.resource !== 'horses') return false;
+        if (!terrainOk && !goldMineOk) return [false, 'Wrong terrain.'];
+        if (improvementKey === 'pasture' && tile.resource !== 'horses') return [false, 'A pasture needs horses.'];
         const civ = this.civs[unit.owner];
-        if (defn.requires_tech && !civ.techsResearched.has(defn.requires_tech)) return false;
+        if (defn.requires_tech && !civ.techsResearched.has(defn.requires_tech))
+            return [false, `Requires ${TECH_DEFS[defn.requires_tech].name}.`];
+        if (tile.city) return [false, 'Not on a city.'];
+        if (tile.owner !== null && tile.owner !== unit.owner) return [false, "Not on another civ's land."];
+        if (tile.improvement === improvementKey) return [false, `There is a ${defn.name} here already.`];
+        return [true, ''];
+    }
+
+    startImprovement(unit, improvementKey) {
+        if (!this.canImprove(unit, improvementKey)[0]) return false;
+        const defn = IMPROVEMENT_DEFS[improvementKey];
         unit.buildingImprovement = improvementKey;
         unit.buildTurnsLeft      = defn.build_turns;
         unit.movesLeft           = 0;
@@ -659,8 +721,8 @@ class Game {
     setProduction(city, itemKey) {
         const [ok, why] = this.canProduce(city, itemKey);
         if (!ok) return [false, why];
+        // Progress stays: what was put into the old item goes into the new one.
         city.productionQueue    = [itemKey];
-        city.productionProgress = 0;
         return [true, ''];
     }
 
@@ -918,8 +980,17 @@ class Game {
 
             // Food growth
             const netFood = yields.food - city.population * 2;
-            city.foodStored = Math.max(0, city.foodStored + netFood);
-            if (city.foodStored >= city.foodGrowthThreshold) {
+            city.foodStored += netFood;
+            if (city.foodStored < 0) {
+                // Starving: the store is empty and a citizen is lost (never
+                // the last one).
+                city.foodStored = 0;
+                if (city.population > 1) {
+                    city.population--;
+                    autoAssignWorkedTiles(city, this.tiles, civ);
+                    civ.pendingMessages.push(`${city.name} is starving and lost a citizen.`);
+                }
+            } else if (city.foodStored >= city.foodGrowthThreshold) {
                 city.population++;
                 city.foodStored = 0;
                 autoAssignWorkedTiles(city, this.tiles, civ);
@@ -931,10 +1002,14 @@ class Game {
             // Culture → border expansion (1 tile per 20 culture)
             civ.culture            += yields.culture;
             city.cultureStored     += yields.culture;
+            let grew = false;
             while (city.cultureStored >= 20) {
                 city.cultureStored -= 20;
                 this._expandBorder(civ, city);
+                grew = true;
             }
+            // A new tile is worth working at once if it beats one worked now.
+            if (grew) autoAssignWorkedTiles(city, this.tiles, civ);
 
             // City HP regen
             if (city.hp < 50) city.hp = Math.min(50, city.hp + 3);

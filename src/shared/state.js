@@ -382,6 +382,7 @@ function getReachableTiles(unit, tiles, turn = 99) {
             if (unit.isCivilian) {
                 if (tile.civilian) continue;
                 if (tile.unit && tile.unit.owner !== unit.owner) continue;
+                if (tile.city && tile.city.owner !== unit.owner) continue; // only soldiers take cities
                 reachable.set(key, cost);
                 queue.push({ q: nq, r: nr, used: cost });
             } else {

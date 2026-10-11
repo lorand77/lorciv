@@ -141,7 +141,11 @@
     $('next-btn').addEventListener('click', () => { stop(); show(step + 1); });
     $('last-btn').addEventListener('click', () => { stop(); show(states.length - 1); });
     $('play-btn').addEventListener('click', play);
-    $('speed').addEventListener('change', () => { if (playing()) { stop(); play(); } });
+    $('speed').addEventListener('change', () => {
+        // Give the arrow keys back to the steps; a focused menu would take them.
+        $('speed').blur();
+        if (playing()) { stop(); play(); }
+    });
     document.addEventListener('keydown', (e) => {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
         if (e.key === 'ArrowRight') { stop(); show(step + 1); }

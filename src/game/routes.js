@@ -51,12 +51,17 @@ const MESSAGE = {
   host: "The host cannot leave; cancel the table instead.",
   in_progress: "The replay opens when the game is over.",
 };
+const MAX_SEED = 0xFFFFFFFF;
+
 function refuse(res, error) {
   return res.status(STATUS[error] ?? 400).json({ error: MESSAGE[error] ?? "Refused." });
 }
 
+// `mySeat` is the seat the user still plays. One handed to the AI (left, or
+// timed out) keeps its user_id, so the game stays in their list, but it is no
+// longer theirs to play: the lobby offers Watch and lists it among live games.
 function withMine(row, userId) {
-  const mine = queries.getSeats.all(row.id).find((s) => s.user_id === userId);
+  const mine = queries.getSeats.all(row.id).find((s) => s.user_id === userId && s.kind === "human");
   return { ...rooms.summary(row), seed: row.seed, mySeat: mine ? mine.seat : null };
 }
 
@@ -66,7 +71,12 @@ router.post("/", (req, res) => {
   if (parsed.error) return res.status(400).json({ error: parsed.error });
   const turnTime = body.turnTime ?? settings.DEFAULT_TURN_TIME;
   if (!settings.turnTimeOf(turnTime)) return res.status(400).json({ error: "Unknown turn time." });
-  const seed = Number.isInteger(body.seed) && body.seed >= 0 ? body.seed >>> 0 : crypto.randomInt(0, 0x7fffffff);
+  // A seed is what the map is generated from: a 32-bit unsigned integer. One
+  // outside that is refused, never quietly wrapped into another map.
+  if (body.seed != null && !(Number.isInteger(body.seed) && body.seed >= 0 && body.seed <= MAX_SEED)) {
+    return res.status(400).json({ error: `The seed is a whole number from 0 to ${MAX_SEED}.` });
+  }
+  const seed = body.seed ?? crypto.randomInt(0, 0x7fffffff);
 
   const { gameId, status } = rooms.createGame({
     hostId: req.session.userId,

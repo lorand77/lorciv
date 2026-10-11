@@ -92,9 +92,20 @@
     err.textContent = "";
     const seats = Array.from({ length: SEATS }, (_, i) =>
       i === 0 ? { kind: "human" } : seatKind[i] === "open" ? { kind: "open" } : { kind: "ai", difficulty: difficulty[i] });
-    const seed = parseInt($("seed-input").value, 10);
+    // The seed as typed, or none (the server draws one). Number() reads "1e5"
+    // as 100000 where parseInt read 1; anything not a whole number in range is
+    // said, not swapped for another seed.
+    const input = $("seed-input");
     const body = { seats, turnTime: $("turn-time").value };
-    if (Number.isInteger(seed) && seed >= 0) body.seed = seed;
+    if (input.validity.badInput) { err.textContent = "The seed is a whole number."; return; }
+    if (input.value.trim() !== "") {
+      const seed = Number(input.value);
+      if (!Number.isInteger(seed) || seed < 0 || seed > 4294967295) {
+        err.textContent = "The seed is a whole number from 0 to 4294967295.";
+        return;
+      }
+      body.seed = seed;
+    }
     try {
       const data = await api("POST", "/api/games", body);
       if (data.status === "active") location.href = "/game.html?id=" + data.id;

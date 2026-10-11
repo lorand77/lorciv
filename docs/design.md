@@ -420,6 +420,31 @@ crosses the wire.
   copy starts from zero. The original charged full price and left a bought
   building in the queue, where its production was wasted. The game page's buy
   buttons show `buyCost`, so they agree with the server.
+- **Production is never thrown away.** `setProduction` keeps the city's
+  progress for the new item, and a city with nothing queued banks its
+  production. The original reset progress on every change and dropped an
+  idle city's production; the AI, which pushes onto its queue, never lost
+  any, so humans were the only ones paying.
+- **Resources are checked again at completion.** A unit needing a resource
+  the civ no longer owns is dropped from the queue when it would be finished,
+  its production kept for the next item.
+- **Workers** (`canImprove`, asked by the server, the AI and the page's
+  buttons): besides terrain, resource and tech, not on another civ's land
+  (its own or unclaimed land will do), never on a city tile, and not the
+  improvement already there. An AI worker refused on its tile moves on to one
+  of its civ's unimproved tiles.
+- **Civilians** cannot enter an enemy city, empty or not; only soldiers take
+  cities.
+- **Starts** are drawn as before, but a draw with no passable neighbour or
+  under 20 connected land tiles is drawn again without it. A good first draw
+  is kept, so of 20,000 seeds only 5 changed (4 stranded a civ on a one-tile
+  island, where the worker overwrote the settler).
+- **Border growth** makes the city pick its worked tiles again, so a better
+  new tile is worked at once.
+- **Starvation.** Food below zero empties the store and costs the city a
+  citizen, never its last; the original clamped the store at zero.
+- **Attackers** get no terrain or fortification bonus: those are defensive.
+  The original gave an attacker its own tile's bonus.
 
 ### Engine API
 
@@ -438,8 +463,8 @@ directly; their rules are the old UI's rules:
 - `setProduction(city, key)`, after `canProduce(city, key)`: `key` is a unit
   or a building other than the palace; its tech is known; a unit needing a
   resource needs a tile of it owned by the civ; a building is not already
-  built. Replaces the queue with that one item and resets progress, as the
-  old list did.
+  built. Replaces the queue with that one item and keeps the progress (see
+  "Rules changed from the original").
 - `setResearch(civ, key)`: the tech is not known and its prerequisites are.
   It may replace research in progress, as the old tree allowed.
 
@@ -550,8 +575,9 @@ the JSON last written to the database. Clients are never trusted for legality,
 turn or seat.
 
 - **Creating a game.** `POST /api/games` (`src/game/routes.js`) with four
-  seats, each `human`, `open` or `ai` with a difficulty, an optional seed and
-  a turn-time key. Exactly one seat is human and it is the requester's. Every
+  seats, each `human`, `open` or `ai` with a difficulty, an optional seed (a
+  whole number from 0 to 4294967295; anything else is refused, never wrapped
+  into another map) and a turn-time key. Exactly one seat is human and it is the requester's. Every
   key is checked against `src/shared/settings.js`, never trusted. A
   difficulty is the AI's handicap, so only an `ai` seat keeps one: a human or
   open seat is stored as `prince` whatever the request says, and the start
@@ -562,7 +588,9 @@ turn or seat.
   AI seats before the first human seat take their turn, and writes the seats
   and the first snapshot; the page then navigates to `game.html?id=<id>`.
   `GET /api/games` lists the games and tables the user holds a seat in,
-  newest activity first; `GET /api/games/:id` is readable by anyone signed
+  newest activity first, with `mySeat` only while the user still plays it: a
+  seat handed to the AI keeps its user, so the game stays listed, but as one
+  to watch (and it shows among live games); `GET /api/games/:id` is readable by anyone signed
   in, because spectating is open.
 - **Joining.** `game:join {gameId}` answers with the full state
   (`rooms.viewFor`): the sequence number `seq`, status, winner, settings, the

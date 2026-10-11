@@ -298,6 +298,9 @@ button.danger {
 
 /* ---- Page header inside the sidebar: back to the lobby, who is signed in ---- */
 #head-panel { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Always in view at the top, unlike the buttons under the chat: going to the
+   lobby is a visit, not a Leave. */
+#head-panel .lobby-link { display: inline-block; padding: 2px 8px; font-size: 11px; flex-shrink: 0; white-space: nowrap; }
 #head-panel .brand { color: #e8d48b; font-weight: 700; text-decoration: none; font-size: 14px; white-space: nowrap; }
 #userbar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #bbb; min-width: 0; }
 #userbar .who { color: #eee; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }

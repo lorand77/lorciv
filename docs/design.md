@@ -686,8 +686,9 @@ returns the last 50 as `chat`. The text is never logged.
 A Players panel lists the seats with the civ, the player or "AI", a marker on
 the seat to move and the missed-turn count of an absent player; the status
 line carries the time left on the clock, red under thirty seconds; a Leave
-button hands the seat to the AI after a confirmation, while a Lobby button
-next to Stats only goes to the lobby, the seat kept and the clock running;
+button hands the seat to the AI after a confirmation, while the "← Lobby"
+link in the top bar (on the replay page too) only goes to the lobby, the
+seat kept and the clock running;
 a Chat panel shows the
 history and sends; `turn:yours` while the tab is in the background changes
 the title and, if allowed, shows a notification. A seat the AI took over, an

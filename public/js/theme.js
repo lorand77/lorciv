@@ -1,7 +1,8 @@
 "use strict";
 
 // Applies the user's colour scheme, dark or light, on every page with the
-// shell. styles.css keys the light palette off <html data-scheme="light">. The
+// shell and on the terms and privacy pages. Signed out, /api/settings is a 401
+// and nothing else happens: no redirect, so those two stay readable. styles.css keys the light palette off <html data-scheme="light">. The
 // setting comes from GET /api/settings; a copy is kept in localStorage so the
 // page paints in the right colours before that answer comes back, which is
 // why this loads in <head>, before anything is drawn. The game and replay

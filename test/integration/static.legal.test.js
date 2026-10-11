@@ -20,6 +20,7 @@ for (const page of ["/terms.html", "/privacy.html"]) {
     const html = await res.text();
     assert.doesNotMatch(html, /authGuard\.js/);
     assert.doesNotMatch(html, /shell\.js/);
+    assert.match(html, /theme\.js/, "it follows the reader's colour scheme");
   });
 }
 

@@ -317,7 +317,8 @@ nesting, so the sub-items hide and the profile page shows its own tab bar.
 
 The stylesheet is dark by default with a light scheme behind
 `<html data-scheme="light">`. `public/js/theme.js` sets it from
-`GET /api/settings`, and loads in `<head>` with a copy of the setting in
+`GET /api/settings` on every page with the shell and on the terms and
+privacy pages, and loads in `<head>` with a copy of the setting in
 localStorage so the page paints in the right scheme before the answer comes
 back; authGuard removes the copy on logout, so the next person at the browser
 gets the default. `customize.html` (`customize.js`; `/js/settings.js` is the
@@ -337,7 +338,8 @@ viewport, so its sidebar carries the link back to the lobby and the user bar.
 
 `public/terms.html` and `public/privacy.html` are plain static pages without
 `shell.js` or `authGuard.js`, because people must be able to read them before
-they have an account; `test/integration/static.legal.test.js` keeps them
+they have an account. They do load `theme.js`, so a signed-in reader sees them
+in their colour scheme; signed out it does nothing but leave them dark; `test/integration/static.legal.test.js` keeps them
 public. They are linked from the login card and from the bottom of the rail.
 Acceptance is implied by registering and is not recorded.
 

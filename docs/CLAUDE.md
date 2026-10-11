@@ -44,7 +44,7 @@ under `src/game/` or `src/shared/`.
   runs the tabs `stats.js`, `history.js` (My Games) and `friendsPage.js`;
   `friends.js` is the friends client and control. `customize.html`/
   `customize.js` sets the colour scheme, which `theme.js` applies on every
-  page with the shell. A page script must not share a name with a file in
+  page with the shell and on terms and privacy. A page script must not share a name with a file in
   `src/shared/`, which is served at `/js/` first. `public/assets/` holds the
   terrain and resource images.
 - `src/db/retention.js` — the chat sweep, started by `server.js` only.

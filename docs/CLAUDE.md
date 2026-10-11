@@ -11,6 +11,9 @@ under `src/game/` or `src/shared/`.
 
 - `npm test` — whole suite. Run it before calling any change done.
   `TEST_LOG=1` shows the server's logs, which the tests silence by default.
+  In an interactive shell `npm` is the Socket wrapper, whose permission model
+  blocks the tests' temporary database: run `node --run test` or `\npm test`
+  there. A plain shell (a tool, a script) has no alias and `npm test` is fine.
 - `npm run test:coverage` — the suite with Node's built-in coverage report.
   Files no test loads (`src/server.js`, CLI scripts, `public/js/`) are not listed.
 - `npm run dev` — http://localhost:3000 with `--watch`; loads `.env` if present.
@@ -35,6 +38,8 @@ under `src/game/` or `src/shared/`.
   lobby: tables, seats, your games, live games, presence. `public/assets/`
   holds the terrain and resource images.
 - `src/db/retention.js` — the chat sweep, started by `server.js` only.
+- `scripts/backup.sh` — the nightly database backup to B2, run by cron on the
+  server (see `docs/setup.md`).
 - `tools/simulate.js` — N AI-only games with win counts; run by hand, never
   loaded by the app.
 - `test/unit`, `test/integration` — `node --test`. `test/helpers/server.js`

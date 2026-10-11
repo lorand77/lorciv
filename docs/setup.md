@@ -19,6 +19,7 @@
 - install node+npm packages
 - install claude code
 
+
 ### install node+npm
 ```
 curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
@@ -43,71 +44,112 @@ npm install PACKAGE_NAME     ## routed via socket now
 npm install PACKAGE_NAME --ignore-scripts=false
 ```
 
+The wrapper aliases `npm` to `socket npm`. A leading backslash (`\npm`) skips the
+alias and runs plain npm, without Socket's check. Four things the wrapper changes:
+- It scans only packages that an install adds or changes in `node_modules`. For
+  a full scan: `rm -rf node_modules && npm ci`, and look for
+  `Socket npm found no risks` (not "no *new* risks").
+- It adds `--no-audit` whenever `node_modules` exists, so `npm audit fix` fixes
+  nothing. Use `npm audit fix --audit`.
+- `npm rebuild` through it runs no install scripts, yet still reports success.
+  Rebuild with `\npm rebuild ...`; the packages were already scanned when they
+  were installed.
+- Scripts (`npm test`, `npm run dev`, `npm start`) run under Node's permission
+  model, allowed to write only in the project, npm's prefix and npm's cache.
+  The tests put their database in the OS temp dir, so through the wrapper they
+  fail with `ERR_ACCESS_DENIED`. Run scripts with `node --run test` (built into
+  Node, no npm) or `\npm test`.
+
 ### install claude code
 ```
 curl -fsSL https://claude.ai/install.sh | bash
 ```
 
+or install the VSC extension
+
 ## run the app
 ```
-npm install
+npm ci             # installs exactly package-lock.json; wipes node_modules first
 
 # Native modules (better-sqlite3, argon2) get their binary from their install
 # script. Two gates block that script; the rebuild below clears both:
 #   1. our global ignore-scripts=true  -> --ignore-scripts=false lifts it
-#   2. npm's install-script allowlist  -> already granted by "allowScripts"
+#   2. npm's install-script allowlist -> already granted by "allowScripts"
 #      in package.json (committed), so no `npm install-scripts approve` needed
-# The leading backslash skips the `npm` -> `socket npm` alias: see below.
+# The backslash bypasses the socket alias, whose rebuild silently does nothing.
+# Needed after every `npm ci`, since that deletes the compiled binary.
 \npm rebuild better-sqlite3 argon2 --foreground-scripts --ignore-scripts=false
 
 npm start
 ```
 
-The rebuild must bypass the Socket wrapper. Since CLI 1.4 (Oct 2026) `socket npm`
-runs npm's lifecycle scripts under Node's permission model without
-`--allow-addons`. better-sqlite3's install script (`prebuild-install`) checks
-the binary it downloaded by loading it, which that mode forbids, so it fails;
-the wrapper then reports "rebuilt dependencies successfully" with no binary
-written, and the server dies at startup with "Could not locate the bindings
-file". `\npm` (or `command npm`) runs plain npm for this one step. Nothing is
-lost: the rebuild only runs the install scripts of two packages the preceding
-`npm install` already put through Socket.
-
 If `npm test` or `npm start` fails with "Could not locate the bindings file",
-the rebuild was run through the wrapper: run it again as above.
+the rebuild was skipped or ran through the wrapper: run the `\npm rebuild` line.
 
 ## test in browser
 open http://localhost:3000
 
 ## run the tests
 ```
-npm test
+node --run test    # or: \npm test
 ```
+Plain `npm test` goes through the wrapper, whose permission model blocks the
+tests' temporary database (see above).
 
+## updating node and socket
+npm is the version bundled with Node and is updated along with it.
+```
+sudo apt update && sudo apt install --only-upgrade nodejs
+
+# socket, through the alias so socket checks its own update; if it trips over
+# replacing itself mid-install, run it once as \npm install -g ...
+npm install -g @socketsecurity/cli
+
+# check: a full socket scan, the native rebuild and the tests
+npm ci    # look for "Socket npm found no risks"
+\npm rebuild better-sqlite3 argon2 --foreground-scripts --ignore-scripts=false
+\npm test
+```
 
 --------------------------------------------------------
 
 # PROD environment - ubuntu server (AWS EC2)
 
 LorCiv runs on the same EC2 instance as LorChess, as a separate process under
-its own system user, on its own port, with its own database and `.env`. The two
-apps share nothing but the machine and Caddy. The instance, Node, pm2, Caddy
-and the backup tooling are set up once, by the LorChess setup notes; this file
-only covers what LorCiv adds.
+its own system user, on its own port, with its own database, `.env`, pm2 daemon
+and backups. The two apps share nothing but the machine and Caddy.
+
+Machine-wide pieces (Node, the global pm2 package, Caddy, sqlite3, rclone) were
+installed once by the LorChess setup and are not repeated here; what follows is
+what LorCiv adds, plus the per-user steps, which every app user does for
+themselves.
 
 ## setup user
 
 ```
 ssh ubuntu@IP_ADDRESS
 sudo adduser --disabled-password --gecos "" lorciv
-sudo -u lorciv -i
 ```
+
+`lorciv` owns the code, the database and its pm2 daemon, and has no sudo.
+Commands starting with `sudo` run as `ubuntu`; everything else runs as
+`lorciv`, after `sudo -u lorciv -i`.
+
 
 ## project code
 ```
+sudo -u lorciv -i
 git clone https://github.com/lorand77/lorciv.git
-cd ~/lorciv
 ```
+
+## node+npm
+
+Already on the machine (LorChess installed it). A Node update is machine-wide:
+```
+sudo apt update && sudo apt install --only-upgrade nodejs
+```
+then `pm2 update` as `lorciv` AND as `lorchess`: each app keeps running on the
+old Node until its own daemon is told (see "updating pm2").
 
 ## configure environment
 
@@ -134,8 +176,9 @@ chmod 600 .env
   obtains a session id (from logs or a DB backup) can turn it into a valid
   cookie. Use a different value per environment and never commit it. Changing it
   invalidates all existing sessions, i.e. logs everyone out.
-- `NODE_ENV=production` — makes `npm install` skip devDependencies and puts
-  Express in production mode. (Uncaught errors never send a stack trace to
+- `NODE_ENV=production` — puts Express in production mode. npm never reads
+  `.env`, so it does not make `npm ci` skip devDependencies: that is what
+  `--omit=dev` is for. (Uncaught errors never send a stack trace to
   the client either way: `src/app.js` answers them itself.)
 - `PORT=3001` — LorChess has 3000 on this machine. Caddy proxies to it below.
 
@@ -143,8 +186,6 @@ Everything else has a default and is read in `src/config.js`; put it in `.env`
 only to change it:
 
 - `DB_PATH` — the SQLite file (default `data/lorciv.sqlite` in the project).
-- `DEACTIVATION_SWEEP_MS` — how often sockets of deactivated accounts are
-  disconnected (default 30000, i.e. 30 s).
 - `DEADLINE_SWEEP_MS` — how often expired human turns are ended (default 1000).
 - `ABANDON_DAYS` — tables and games untouched this long are aborted (default 30).
 - `CHAT_RETENTION_DAYS` — how long in-game chat is kept after a game ends;
@@ -154,40 +195,71 @@ only to change it:
   900000, i.e. 15 min); past that, 429 until the window moves on.
 - `HASH_MAX_CONCURRENT` — how many password hashes or checks may run at once
   (default 2, one per vCPU); more get 503 "server busy" instead of waiting.
-- `LOG_LEVEL` — `error`, `warn`, `info` or `debug` (default `info`); `debug`
-  adds detail for an investigation. See "Logging" in `design.md`.
+- `DEACTIVATION_SWEEP_MS` — how often sockets of accounts deactivated from the
+  command line are disconnected (default 30000, i.e. 30 s).
+- `LOG_LEVEL` — `silent`, `error`, `warn`, `info` or `debug` (default `info`);
+  `debug` adds detail for an investigation. See "Logging" in `design.md`.
 
 ## run the app
 ```
-npm install
-\npm rebuild better-sqlite3 argon2 --foreground-scripts --ignore-scripts=false
+npm ci --omit=dev
+npm start
 ```
-(The backslash matters only where the Socket wrapper is aliased as `npm`; see
-"run the app" in the DEV section for why the rebuild must bypass it.)
 
-with pm2 (installed globally for the machine already):
+or better use pm2 (the global package is already installed, by LorChess's
+setup; each user runs their own daemon):
 ```
+sudo -u lorciv -i
 pm2 start npm --name "lorciv" -- start
 
-# survive reboot (per user; LorChess did the same for its user):
+# survive reboot:
 pm2 save
-pm2 startup
+pm2 startup                     # prints a `sudo env PATH=... pm2 startup ... -u lorciv --hp /home/lorciv` line: run that as ubuntu
 
-pm2 list                     # see all running processes and their status
-pm2 logs lorciv              # tail live logs
-pm2 logs lorciv --lines 100  # show last 100 lines
-pm2 restart lorciv           # restart the app (e.g. after deploying new code)
-pm2 stop lorciv              # stop without removing from pm2's list
-pm2 delete lorciv            # remove from pm2 entirely
-pm2 monit                    # live dashboard: CPU, memory, logs
+
+pm2 list                        # see all running processes and their status
+pm2 logs lorciv                 # tail live logs
+pm2 logs lorciv --lines 100     # show last 100 lines
+pm2 restart lorciv              # restart the app (e.g. after deploying new code)
+pm2 stop lorciv                 # stop without removing from pm2's list
+pm2 delete lorciv               # remove from pm2 entirely
+pm2 monit                       # live dashboard: CPU, memory, logs
 ```
+
+The boot service from `pm2 startup` is per user (`pm2-lorciv`), next to
+LorChess's `pm2-lorchess`; each brings its own daemon and app up at boot.
+
+### updating pm2
+
+Two parts: the global package (installed with sudo, shared by both apps) and
+the daemon already running the app, which keeps the old version until told to
+reload.
+```
+sudo npm install -g pm2@latest  # as ubuntu, once for the machine
+
+sudo -u lorciv -i
+pm2 update                      # saves the list, restarts the daemon and the app (a few seconds down)
+pm2 save
+```
+and the same `pm2 update` as `lorchess`.
+
+- A Node update leaves pm2 installed, but the daemon keeps the old Node until
+  `pm2 update`.
+- The boot service from `pm2 startup` calls `/usr/bin/pm2`, which doesn't move,
+  so `pm2 startup` needn't be rerun.
+
+Check:
+```
+pm2 list                        # lorciv "online"
+```
+
 
 ### log rotation
 
 pm2 appends the app's stdout and stderr to `~/.pm2/logs/lorciv-out.log` and
 `~/.pm2/logs/lorciv-error.log` and never trims them, so without rotation they
-grow until the disk is full (and SQLite can no longer write). pm2 runs per
-user, so the rotation module is installed once for this user too:
+grow until the disk is full (and SQLite can no longer write). The rotation
+module is per user: install it as `lorciv` too:
 ```
 pm2 install pm2-logrotate
 pm2 set pm2-logrotate:rotateInterval '0 0 * * *'   # rotate daily at midnight
@@ -196,13 +268,24 @@ pm2 set pm2-logrotate:retain 14                    # keep 14 rotated files per l
 pm2 set pm2-logrotate:compress true                # gzip the rotated files
 ```
 
+Rotated files sit next to the live ones as `lorciv-out__<date>.log.gz`.
 `retain` counts files, not days: a size-triggered rotation adds a file, so
-the 14 kept cover at most 14 days, never more. The privacy policy says logs
-live 14 days: keep these settings in step with it.
+the 14 kept cover at most 14 days, never more. Rotation copies the file and
+then truncates it, so the app keeps writing without a restart. pm2's own
+`~/.pm2/pm2.log` is rotated too. The privacy policy says logs live 14 days:
+keep these settings in step with it.
+
+```
+pm2 conf pm2-logrotate     # show the current settings
+ls -lh ~/.pm2/logs/        # live and rotated files with their sizes
+```
 
 ## https with custom domain (Caddy)
 
-Caddy is already installed and serving LorChess on this machine.
+Caddy is installed and serving LorChess on this machine; ports 80 and 443 are
+open in the EC2 firewall. Port 3001 is not, and must stay closed: the app
+trusts `X-Forwarded-For` for its login throttling (see `design.md`), which is
+only safe while every request comes through Caddy.
 
 - name.com: manage DNS -> add A record: host `lorciv` -> IP_ADDRESS
 
@@ -221,15 +304,22 @@ lorciv.lorand77.dev {
 sudo systemctl reload caddy
 ```
 
-Port 3001 must not be reachable from outside, only through Caddy: the app
-trusts `X-Forwarded-For` for its login throttling (see `design.md`).
-
 ## deploying new code
 ```
 git pull
-npm install        # in case dependencies changed
+npm ci --omit=dev  # exactly the committed package-lock.json, nothing re-resolved
 pm2 restart lorciv
 ```
+
+`npm ci` deletes `node_modules` and reinstalls, so restart straight after.
+Here ignore-scripts is not set, so the native modules build during `npm ci`. If
+it ever is set on the server, add the `\npm rebuild ...` line from the dev
+"run the app" section before restarting. Never `npm install` or `npm audit fix`
+on the server: change dependencies in dev, test, commit the lockfile, deploy.
+
+A restart is safe at any moment: every accepted action is already in SQLite,
+every active game is rebuilt when the server comes back, and a turn that ran
+out while it was down is ended on the first sweep.
 
 ## changing a user's password
 
@@ -264,34 +354,55 @@ npm run user:reactivate -- <username>
 
 A deactivated user cannot log in (they are told the account is deactivated,
 but only after typing the right password). Their sessions are ended at once;
-open tabs are disconnected within 30 s (`DEACTIVATION_SWEEP_MS`). Nothing is
+open tabs are disconnected within 30 s (`DEACTIVATION_SWEEP_MS`). A seat they
+hold in a live game is not touched: its turns run out on the table's clock and
+after three the AI takes the seat, as for any absent player. Nothing is
 deleted: the username stays taken, and reactivating restores the account.
 
-Deleting a user is not built yet (see `plan.md`, M4); until then, deactivate.
+## deleting a user
+
+Not built yet (plan, M5): deactivate instead. When it comes it will follow
+LorChess's command: the row stays, renamed, so games keep their record; what is
+only the user's is deleted; copies in B2 backups expire with the backups.
 
 ## backing up sqlite database
 
+sqlite3 is installed (by LorChess's setup). As `lorciv`:
 ```
-mkdir -p backups
-
-sqlite3 data/lorciv.sqlite "VACUUM INTO 'backups/lorciv-backup-$(date +\%F).sqlite'"
+sudo -u lorciv -i
+cd ~/lorciv
+mkdir -p ~/backups
+sqlite3 data/lorciv.sqlite "VACUUM INTO '$HOME/backups/lorciv-backup-$(date +%F).sqlite'"
 ```
 
-and move the backup file somewhere safe (e.g. download to local machine, upload
-to cloud storage etc.)
+and move the backup file somewhere safe (e.g. download to local machine, upload to cloud storage etc.)
 
+Restore, in the project dir:
 ```
+rclone copy b2:lorciv-backups/lorciv-backup-DATE.sqlite ~/backups/   # only if it isn't in ~/backups
 pm2 stop lorciv
-cp backups/lorciv-backup-DATE.sqlite data/lorciv.sqlite
+cp ~/backups/lorciv-backup-DATE.sqlite data/lorciv.sqlite
 rm -f data/lorciv.sqlite-wal data/lorciv.sqlite-shm
 pm2 start lorciv
 ```
 
 ### backup to B2
 
-rclone is already installed and configured for the LorChess backups; this user
-needs its own `rclone config` (the config file is per user). Use a separate
-bucket or prefix, e.g. `b2:lorciv-backups/`.
+rclone is installed (by LorChess's setup), but its configuration is per user:
+`lorciv` configures its own remote, pointing at its own bucket.
+```
+sudo -u lorciv -i
+rclone config                   # a remote named b2, bucket lorciv-backups
+rclone copy test1.txt b2:lorciv-backups/
+# restore:
+rclone copy b2:lorciv-backups/test1.txt .
+```
 
-The nightly backup script (`scripts/backup.sh`) and its cron line come with
-milestone M4 of `plan.md`.
+and create a cron job to run the backup script `scripts/backup.sh` daily: as
+`lorciv`, `crontab -e` and add
+```
+0 3 * * * /home/lorciv/lorciv/scripts/backup.sh >> /home/lorciv/backups/backup.log 2>&1
+```
+It writes to `~/backups/`, the same folder as the manual backup above, and
+keeps 7 days there and 30 days in B2. The privacy policy says backups are kept
+for at most 90 days; this keeps well within that.

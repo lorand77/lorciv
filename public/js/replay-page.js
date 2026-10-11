@@ -153,7 +153,12 @@
     window.addEventListener('resize', () => { sizeCanvas(); if (renderer) renderer.draw(); });
 
     fetch(`/api/games/${GAME_ID}/replay`, { credentials: 'same-origin' })
-        .then((res) => { if (!res.ok) throw new Error(res.status === 404 ? 'No such game, or it has not started.' : 'HTTP ' + res.status); return res.json(); })
+        .then((res) => {
+            if (res.ok) return res.json();
+            if (res.status === 404) throw new Error('No such game, or it has not started.');
+            // A game still being played is refused with the reason.
+            return res.json().catch(() => ({})).then((body) => { throw new Error(body.error || 'HTTP ' + res.status); });
+        })
         .then((data) => {
             record = data;
             status('Rebuilding the game…');

@@ -67,12 +67,23 @@ test("replaying the recorded actions reproduces the stored game, step by step", 
   snapshots.push(sa.snapshot);
   assert.equal(sa.seats[2].kind, "ai");
 
+  // Still being played: no replay, for players or anyone else.
+  const early = await alice.c.get(`/api/games/${id}/replay`);
+  assert.equal(early.status, 403);
+  assert.equal(early.body.error, "The replay opens when the game is over.");
+  // Alice leaves too; with nobody human left the game is over (aborted).
+  const over = waitFor(a, "game:state");
+  assert.deepEqual(await emitAck(a, "game:leave", { gameId: id }), { ok: true });
+  sa = await over;
+  snapshots.push(sa.snapshot);
+  assert.equal(sa.status, "aborted");
+
   const record = (await alice.c.get(`/api/games/${id}/replay`)).body;
   assert.deepEqual(record.setup, snapshots[0].setup);
   assert.deepEqual(record.setup.cpuFlags, [true, false, false, true]);
   assert.equal(record.actions.length, snapshots.length - 1);
   assert.deepEqual(record.actions.map((x) => x.action.type),
-    ["move", "foundCity", "setResearch", "endTurn", "timeout", "endTurn", "timeout", "endTurn", "leave"]);
+    ["move", "foundCity", "setResearch", "endTurn", "timeout", "endTurn", "timeout", "endTurn", "leave", "leave"]);
   assert.equal(record.actions[4].seat, 2);
 
   const replay = replayAll(record);
@@ -85,6 +96,7 @@ test("replaying the recorded actions reproduces the stored game, step by step", 
   assert.equal(replay.labels[2], "Greece founds a city");
   assert.equal(replay.labels[5], "The Huns runs out of time");
   assert.equal(replay.labels[9], "The Huns leaves the game");
+  assert.equal(replay.labels[10], "Greece leaves the game");
 });
 
 test("the replay endpoint: 404 for unknown games and tables; a record that breaks the rules is reported", async () => {
@@ -94,8 +106,10 @@ test("the replay endpoint: 404 for unknown games and tables; a record that break
   assert.equal((await alice.c.get(`/api/games/${table}/replay`)).status, 404, "nothing to replay yet");
 
   const id = (await alice.c.post("/api/games", { seats: [{ kind: "human" }, { kind: "ai" }, { kind: "ai" }, { kind: "ai" }], seed: 1 })).body.id;
+  assert.equal((await alice.c.get(`/api/games/${id}/replay`)).status, 403, "not while it is played");
+  rooms.leaveGame(rooms.getRoom(id), alice.user.id);
   const record = (await alice.c.get(`/api/games/${id}/replay`)).body;
-  record.actions.push({ seq: 1, seat: 0, action: { type: "move", unitId: 9999, q: 0, r: 0 } });
+  record.actions = [{ seq: 1, seat: 0, action: { type: "move", unitId: 9999, q: 0, r: 0 } }];
   const replay = replayAll(record);
   assert.equal(replay.states.length, 1);
   assert.deepEqual(replay.error, { seq: 1, ok: false, error: "no_such_unit", message: "" });

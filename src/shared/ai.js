@@ -722,6 +722,10 @@ function aiTakeTurn(game, civ) {
 // The simulator, the tests and the server's rooms all use it.
 function runCpuTurns(game, maxTurn = Infinity) {
     while (game.winner === null && game.turn <= maxTurn && game.currentCiv().isCpu && !humansAllOut(game)) {
+        // Nobody reads an AI civ's messages; clear them as rooms.js does for a
+        // human who acts, or they pile up in every snapshot for the whole game.
+        game.currentCiv().pendingMessages = [];
+        game.currentCiv().researchJustCompleted = false;
         aiTakeTurn(game, game.currentCiv());
         game.endTurn();
     }

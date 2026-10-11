@@ -39,13 +39,14 @@ function parseSeats(input, userId) {
 // How a rooms.js refusal answers over HTTP.
 const STATUS = {
   no_such_game: 404, no_such_seat: 404, not_lobby: 409, seat_taken: 409, already_seated: 409,
-  not_host: 403, not_yours: 403, host: 409,
+  not_host: 403, not_yours: 403, host: 409, in_progress: 403,
 };
 const MESSAGE = {
   no_such_game: "No such game.", no_such_seat: "No such seat.", not_lobby: "That game has started.",
   seat_taken: "That seat is taken.", already_seated: "You already have a seat in this game.",
   not_host: "Only the host can do that.", not_yours: "That is not your seat.",
   host: "The host cannot leave; cancel the table instead.",
+  in_progress: "The replay opens when the game is over.",
 };
 function refuse(res, error) {
   return res.status(STATUS[error] ?? 400).json({ error: MESSAGE[error] ?? "Refused." });
@@ -99,11 +100,14 @@ router.get("/:id", (req, res) => {
 
 // Everything the replay page needs to rebuild a game: the setup the engine
 // started from (kept in every snapshot) and the recorded actions. Tables have
-// no snapshot and nothing to replay.
+// no snapshot and nothing to replay. A game still being played has none
+// either: its history, step by step, is something a player could study
+// against the people still playing it.
 router.get("/:id/replay", (req, res) => {
   const id = Number(req.params.id);
   const row = Number.isInteger(id) ? queries.getGameById.get(id) : null;
   if (!row || !row.snapshot) return refuse(res, "no_such_game");
+  if (row.status === "active") return refuse(res, "in_progress");
   return res.json({
     ...withMine(row, req.session.userId),
     setup: JSON.parse(row.snapshot).setup,

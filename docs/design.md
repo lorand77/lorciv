@@ -587,7 +587,8 @@ ack would be dropped and leave the page locked.
 - **Messages:** the civ's `pendingMessages` from the snapshot (research done,
   production finished, written during its own end of turn) show in the Event
   panel at the start of the next turn; the server clears them on the seat's
-  next action. The tech tree opens by itself at the start of our turn when
+  next action. An AI civ's are cleared by `runCpuTurns` before each of its
+  turns, since nobody reads them. The tech tree opens by itself at the start of our turn when
   nothing is being researched, as the original did.
 - **Victory** shows the original overlay with the score graph from the
   snapshot's `scoreHistory`, and a button back to the lobby.
@@ -718,12 +719,14 @@ the rules refuse, which would mean the record is corrupt.
 takeover and a leave through the server and checks that the replay reproduces
 every stored snapshot exactly: the determinism of the engine, tested on a real
 game. `GET /api/games/:id/replay` returns the setup and the actions (404 for a
-table, which has nothing to replay); `replay.html` (`replay-page.js`) rebuilds
+table, which has nothing to replay; 403 for a game still being played, whose
+step-by-step history a player could study against the people still playing
+it); `replay.html` (`replay-page.js`) rebuilds
 the states in the browser in slices, so a long game does not freeze the page,
 and shows them on the game's canvas with a slider, step buttons, play at three
-speeds and the arrow keys. It is linked from every started game in the lobby
-and from the victory screen. The replay page loads `ai.js`; the game page does
-not.
+speeds and the arrow keys. It is linked from every finished or abandoned
+game in the lobby and from the victory screen. The replay page loads `ai.js`;
+the game page does not.
 
 ## Decided, not yet built
 

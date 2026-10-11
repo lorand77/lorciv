@@ -197,6 +197,15 @@ describe("applyAction", () => {
     assert.equal(capital.buildings.filter((b) => b === "palace").length, 1);
   });
 
+  test("an AI civ's messages last one round, not the whole game", () => {
+    const sim = new Game({ seed: 11, cpuFlags: [true, true, true, true] });
+    runCpuTurns(sim, 60);
+    for (const civ of sim.civs) {
+      // One end of turn's worth at most: a tech, a few cities' production, bankruptcy.
+      assert.ok(civ.pendingMessages.length <= civ.cities.length + 3, `${civ.name}: ${civ.pendingMessages.length}`);
+    }
+  });
+
   test("the AI stops the moment the last human civ is eliminated", () => {
     applyAction(g, 0, { type: "endTurn" });
     // Seat 1's turn wipes seat 0 out, as a conquest would.

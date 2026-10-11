@@ -181,9 +181,13 @@
       const links = el("span", "controls");
       const open = el("a", "button-link", g.status === "active" ? (g.mySeat !== null ? "Play" : "Watch") : "View");
       open.href = "/game.html?id=" + g.id;
-      const replay = el("a", "button-link", "Replay");
-      replay.href = "/replay.html?id=" + g.id;
-      links.append(open, replay);
+      links.appendChild(open);
+      // Replays open once a game is over (the server refuses them before).
+      if (g.status !== "active") {
+        const replay = el("a", "button-link", "Replay");
+        replay.href = "/replay.html?id=" + g.id;
+        links.appendChild(replay);
+      }
       row.appendChild(links);
     }
     return row;

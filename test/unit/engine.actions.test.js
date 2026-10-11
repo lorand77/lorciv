@@ -206,6 +206,87 @@ describe("applyAction", () => {
     }
   });
 
+  test("a full city's new unit waits for room; buying one is refused; no landing on an enemy", () => {
+    const { hexNeighbors } = require("../../src/shared/hex");
+    const { TERRAIN_PASSABLE } = require("../../src/shared/state");
+    const { processProduction } = require("../../src/shared/game");
+    assert.equal(applyAction(g, 0, { type: "foundCity", unitId: unitOf(g, 0, "settler").id }).ok, true);
+    const civ = g.civs[0];
+    const city = civ.cities[0];
+    const place = (owner, q, r, unitType = "warrior") => {
+      const u = new Unit({ id: g.nextId++, unitType, owner, q, r });
+      g.civs[owner].units.push(u);
+      const t = g.tiles.get(`${q},${r}`);
+      if (u.isCivilian) t.civilian = u; else t.unit = u;
+      return u;
+    };
+    // Fill the city tile and every passable neighbour's military slot.
+    const cityTile = g.tiles.get(`${city.q},${city.r}`);
+    if (!cityTile.unit) place(0, city.q, city.r);
+    const around = hexNeighbors(city.q, city.r).map(([q, r]) => g.tiles.get(`${q},${r}`))
+      .filter((t) => t && TERRAIN_PASSABLE[t.terrain]);
+    for (const t of around) if (!t.unit) place(0, t.q, t.r);
+    const count = civ.units.length;
+    civ.gold = 500;
+
+    const res = applyAction(g, 0, { type: "buy", cityId: city.id, key: "warrior" });
+    assert.equal(res.ok, false);
+    assert.match(res.message, /No room/);
+    assert.equal(civ.gold, 500, "nothing spent");
+
+    city.productionQueue = ["warrior"];
+    city.productionProgress = 1000;
+    assert.match(processProduction(city, civ, g), /no room/);
+    assert.deepEqual(city.productionQueue, ["warrior"], "it waits in the queue");
+    assert.ok(city.productionProgress >= 1000, "progress kept");
+    assert.equal(civ.units.length, count);
+
+    // An enemy on the one free tile does not make room either.
+    const spot = around[0];
+    g.removeUnit(spot.unit);
+    place(1, spot.q, spot.r, "worker");
+    assert.equal(applyAction(g, 0, { type: "buy", cityId: city.id, key: "warrior" }).ok, false);
+
+    // Room again: the unit is trained there, alone on its tile.
+    g.removeUnit(spot.civilian);
+    assert.match(processProduction(city, civ, g), /trained/);
+    assert.equal(spot.unit.owner, 0);
+    assert.equal(spot.unit.unitType, "warrior");
+    assert.deepEqual(city.productionQueue, []);
+  });
+
+  test("after a capture every city works only tiles its civ owns", () => {
+    const sim = new Game({ seed: 11, cpuFlags: [true, true, true, true] });
+    runCpuTurns(sim, 60);
+    const loser = sim.civs.find((c) => c.cities.length >= 2);
+    const winner = sim.civs.find((c) => c !== loser && !c.isEliminated);
+    const target = loser.cities.find((c) => c !== loser.originalCapital) ?? loser.cities[0];
+    const conqueror = new Unit({ id: sim.nextId++, unitType: "warrior", owner: winner.playerIndex, q: target.q, r: target.r });
+    winner.units.push(conqueror);
+    sim._captureCity(conqueror, target);
+    for (const civ of [winner, loser]) {
+      for (const city of civ.cities) {
+        for (const [q, r] of city.workedTiles) {
+          assert.equal(sim.tiles.get(`${q},${r}`).owner, city.owner, `${city.name} works (${q},${r})`);
+        }
+      }
+    }
+  });
+
+  test("no victory while a civ still has a settler to found its capital with", () => {
+    const humans = new Game({ seed: 11, cpuFlags: [false, false, false, false] });
+    assert.equal(applyAction(humans, 0, { type: "foundCity", unitId: unitOf(humans, 0, "settler").id }).ok, true);
+    for (let seat = 0; seat < 4; seat++) assert.equal(applyAction(humans, seat, { type: "endTurn" }).ok, true);
+    assert.equal(humans.turn, 2);
+    humans.checkVictory();
+    assert.equal(humans.winner, null, "the others are still walking their settlers");
+
+    // Once nobody else can found any more, the one capital is all there is.
+    for (const seat of [1, 2, 3]) humans.removeUnit(unitOf(humans, seat, "settler"));
+    humans.checkVictory();
+    assert.equal(humans.winner, 0);
+  });
+
   test("the AI stops the moment the last human civ is eliminated", () => {
     applyAction(g, 0, { type: "endTurn" });
     // Seat 1's turn wipes seat 0 out, as a conquest would.

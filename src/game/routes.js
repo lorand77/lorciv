@@ -28,7 +28,10 @@ function parseSeats(input, userId) {
     if (!["human", "open", "ai"].includes(s.kind)) return { error: "A seat is human, open or ai." };
     const difficulty = s.difficulty ?? "prince";
     if (!settings.DIFFICULTIES.includes(difficulty)) return { error: "Unknown difficulty." };
-    seats.push({ seat: i, kind: s.kind, userId: s.kind === "human" ? userId : null, difficulty });
+    // A difficulty is the AI's handicap. On a human or open seat it would hand
+    // a person the AI's bonuses (the form never sends one; a hand-made request
+    // could), so those seats are always prince.
+    seats.push({ seat: i, kind: s.kind, userId: s.kind === "human" ? userId : null, difficulty: s.kind === "ai" ? difficulty : "prince" });
   }
   if (seats.filter((s) => s.kind === "human").length !== 1) {
     return { error: "Exactly one seat is yours." };

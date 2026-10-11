@@ -502,9 +502,17 @@ function handleClick(tile) {
     }
 
     // Select our own unit or city (for a look, even when it is not our turn).
-    const u = tile.unit ?? tile.civilian;
-    if (u && u.owner === mySeat) { selectUnit(u); redraw(); return; }
-    if (tile.city && tile.city.owner === mySeat) { selectCity(tile.city); redraw(); return; }
+    // A tile can hold a military unit, a civilian and a city at once: the first
+    // click takes the first of ours, each further click on the same tile the
+    // next, round and round, so a garrison never hides its city.
+    const here = [tile.unit, tile.civilian, tile.city].filter(x => x && x.owner === mySeat);
+    if (here.length) {
+        const current = here.findIndex(x => x === tile.city ? sel.cityId === x.id : sel.unitId === x.id);
+        const next = here[(current + 1) % here.length];
+        if (next === tile.city) selectCity(next); else selectUnit(next);
+        redraw();
+        return;
+    }
 
     deselect();
     redraw();

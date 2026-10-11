@@ -182,6 +182,27 @@ function getItemCost(itemKey) {
     return 9999;
 }
 
+// Where a new unit can stand: the city tile, else the first free neighbour,
+// or null when there is none. A tile is free for it when its own slot (unit or
+// civilian) is empty and no other civ's unit, civilian or city is there: a new
+// unit never lands on top of another or next to nothing. Buying and production
+// both ask first, so a full city waits rather than stacking units on a tile.
+function unitSpawnTile(game, city, itemKey) {
+    const isCivilian = UNIT_DEFS[itemKey].type === 'civilian';
+    const free = (t) => !!t && TERRAIN_PASSABLE[t.terrain]
+        && !(isCivilian ? t.civilian : t.unit)
+        && !(t.city && t.city.owner !== city.owner)
+        && !(t.unit && t.unit.owner !== city.owner)
+        && !(t.civilian && t.civilian.owner !== city.owner);
+    const cityTile = game.tiles.get(`${city.q},${city.r}`);
+    if (free(cityTile)) return cityTile;
+    for (const [nq, nr] of hexNeighbors(city.q, city.r)) {
+        const t = game.tiles.get(`${nq},${nr}`);
+        if (free(t)) return t;
+    }
+    return null;
+}
+
 function _completeItem(city, civ, game, itemKey) {
     if (BUILDING_DEFS[itemKey]) {
         if (!city.buildings.includes(itemKey)) city.buildings.push(itemKey);
@@ -190,36 +211,12 @@ function _completeItem(city, civ, game, itemKey) {
 
     if (UNIT_DEFS[itemKey]) {
         const defn = UNIT_DEFS[itemKey];
-        const unit = new Unit({ id: game.nextId++, unitType: itemKey, owner: civ.playerIndex, q: city.q, r: city.r });
+        // The callers have checked there is room (unitSpawnTile).
+        const tile = unitSpawnTile(game, city, itemKey);
+        const unit = new Unit({ id: game.nextId++, unitType: itemKey, owner: civ.playerIndex, q: tile.q, r: tile.r });
         if (!unit.isCivilian) unit.xp = civ.startingXp;
-
-        const cityTile = game.tiles.get(`${city.q},${city.r}`);
-        let placed = false;
-
-        if (cityTile) {
-            if (defn.type === 'civilian' && !cityTile.civilian) {
-                cityTile.civilian = unit; placed = true;
-            } else if (defn.type !== 'civilian' && !cityTile.unit) {
-                cityTile.unit = unit; placed = true;
-            }
-        }
-
-        if (!placed) {
-            for (const [nq, nr] of hexNeighbors(city.q, city.r)) {
-                const t = game.tiles.get(`${nq},${nr}`);
-                if (!t || !TERRAIN_PASSABLE[t.terrain]) continue;
-                if (defn.type === 'civilian' && !t.civilian) {
-                    unit.q = nq; unit.r = nr; t.civilian = unit; placed = true; break;
-                } else if (defn.type !== 'civilian' && !t.unit) {
-                    unit.q = nq; unit.r = nr; t.unit = unit; placed = true; break;
-                }
-            }
-        }
-
-        if (!placed && cityTile) {
-            if (defn.type === 'civilian') cityTile.civilian = unit;
-            else cityTile.unit = unit;
-        }
+        if (unit.isCivilian) tile.civilian = unit;
+        else tile.unit = unit;
 
         civ.units.push(unit);
         return `${city.name}: ${defn.name} trained!`;
@@ -236,6 +233,11 @@ function processProduction(city, civ, game) {
     const cost    = getItemCost(itemKey);
 
     if (city.productionProgress >= cost) {
+        // A finished unit with nowhere to stand waits, progress kept, until
+        // the city or a neighbour frees up.
+        if (UNIT_DEFS[itemKey] && !unitSpawnTile(game, city, itemKey)) {
+            return `${city.name}: no room for a new ${UNIT_DEFS[itemKey].name}; it waits.`;
+        }
         city.productionProgress -= cost;
         const msg = _completeItem(city, civ, game, itemKey);
         city.productionQueue.shift();
@@ -561,6 +563,8 @@ class Game {
             if (reqRes && ![...this.tiles.values()].some(t => t.resource === reqRes && t.owner === city.owner))
                 return [false, `Requires ${reqRes} resource.`];
         }
+        if (UNIT_DEFS[itemKey] && !unitSpawnTile(this, city, itemKey))
+            return [false, `No room around ${city.name} for a new ${UNIT_DEFS[itemKey].name}.`];
         const goldCost = getItemCost(itemKey) * 2;
         if (civ.gold < goldCost) return [false, `Need ${goldCost}g (have ${civ.gold}g).`];
         civ.gold -= goldCost;
@@ -720,6 +724,11 @@ class Game {
             if (distCaptured < minDistOld) t.owner = newOwnerIdx;
         }
 
+        // Tiles changed hands: the captured city and the loser's other cities
+        // work what they own now, not what they worked before.
+        autoAssignWorkedTiles(city, this.tiles, newCiv);
+        for (const c of oldCiv.cities) autoAssignWorkedTiles(c, this.tiles, oldCiv);
+
         if (!oldCiv.cities.length) {
             oldCiv.isEliminated = true;
             for (const u of [...oldCiv.units]) this.removeUnit(u);
@@ -802,8 +811,16 @@ class Game {
         return msg;
     }
 
+    // A civ wins by holding every original capital. A civ that has not founded
+    // its capital yet but still has a settler to do it with keeps the game
+    // open: without that, the first civ to found would win on turn 2 while the
+    // others were still walking their settlers. One with neither city nor
+    // settler can never found, and does not hold anyone up.
     checkVictory() {
         if (this.winner !== null || this.turn <= 1) return;
+        const stillToFound = this.civs.some(c =>
+            !c.originalCapital && c.units.some(u => u.unitType === 'settler'));
+        if (stillToFound) return;
         const originalCaps = this.civs.map(c => c.originalCapital).filter(Boolean);
         if (!originalCaps.length) return;
         for (const civ of this.civs) {

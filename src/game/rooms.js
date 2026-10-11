@@ -185,7 +185,9 @@ function startGame(gameId, userId) {
   const game = new Game({
     seed: row.seed,
     cpuFlags: kinds.map((k) => k !== "human"),
-    difficultyFlags: seatRows.map((s) => (s.kind === "open" ? "prince" : s.difficulty)),
+    // Only AI seats carry a difficulty's bonuses: a person plays at prince,
+    // whatever a row created before this rule may say.
+    difficultyFlags: seatRows.map((s) => (s.kind === "ai" ? s.difficulty : "prince")),
   });
   runCpuTurns(game); // AI seats before the first human take their turn now
   const gameSettings = JSON.parse(row.settings);
@@ -324,7 +326,11 @@ function commit(room, action, seat, userId, seatChange = null) {
 
   if (game.winner !== null) room.status = "finished";
   else if (!humanLeft(room)) room.status = "aborted";
-  room.deadline = computeDeadline(room);
+  // The clock starts when a turn begins and runs until it ends; an action
+  // within the turn must not restart it, or a player could hold the turn
+  // forever with a move a minute. A game that ended has no clock at all.
+  const turnChanged = before.player !== game.currentPlayer || before.turn !== game.turn;
+  if (turnChanged || room.status !== "active" || room.deadline === null) room.deadline = computeDeadline(room);
   room.seq++;
   try {
     room.lastSnapshot = persist(room, action, seat, userId, seatChange);
@@ -340,7 +346,6 @@ function commit(room, action, seat, userId, seatChange = null) {
   }
   events.emit("state", room);
   // The lobby lists whose turn it is and the status, not every move.
-  const turnChanged = before.player !== game.currentPlayer || before.turn !== game.turn;
   if (before.status !== room.status || turnChanged) events.emit("lobby");
   if (room.status === "active" && turnChanged) events.emit("turn", room);
   return null;

@@ -162,3 +162,21 @@ test("abandoned tables and games are swept; fresh ones are left alone", async (t
   assert.equal(rooms.sweepAbandoned(), 0);
   void expectNo;
 });
+
+test("acting within a turn leaves the clock alone; only a new turn restarts it", async (t) => {
+  const { id, socket, state, room } = await timedGame(t, "1m", undefined, "staller");
+  const worker = deserializeGame(state.snapshot).civs[0].units.find((u) => u.unitType === "worker");
+  // Most of the turn has gone by.
+  room.deadline = Date.now() + 5000;
+  const deadline = room.deadline;
+  let next = waitFor(socket, "game:state");
+  assert.equal((await emitAck(socket, "game:action", { gameId: id, seq: state.seq, type: "skip", unitId: worker.id })).ok, true);
+  const s1 = await next;
+  assert.equal(s1.deadline, deadline, "a move does not buy more time");
+  assert.equal(Date.parse(queries.getGameById.get(id).turn_deadline), deadline);
+
+  next = waitFor(socket, "game:state");
+  assert.equal((await emitAck(socket, "game:action", { gameId: id, seq: s1.seq, type: "endTurn" })).ok, true);
+  const s2 = await next;
+  assert.ok(s2.deadline - Date.now() > 55000, "the next turn gets a full clock");
+});

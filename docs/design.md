@@ -377,10 +377,28 @@ through capture, and its buildings except the palace, which belongs to its
 civ: a conqueror would otherwise collect a palace's yields for every capital
 it took (the original did, a departure made on 2026-10-11). A civ that takes
 its own original capital back gets its palace back; the palace is not moved
-to another city while the capital is lost. `game.unitById(id)` and `game.cityById(id)` are linear scans
-over the civs; a game has a few dozen of each, and a scan beats keeping an
-index in step with every capture. Clients name a unit or city by id and never
-by position; object identity never crosses the wire.
+to another city while the capital is lost. After a capture the captured city
+and the loser's remaining cities pick their worked tiles again, so no city
+works a tile its civ no longer owns. `game.unitById(id)` and
+`game.cityById(id)` are linear scans over the civs; a game has a few dozen of
+each, and a scan beats keeping an index in step with every capture. Clients
+name a unit or city by id and never by position; object identity never
+crosses the wire.
+
+### Rules changed from the original (2026-10-11)
+
+- **A new unit needs room.** `unitSpawnTile` gives the city tile, else the
+  first neighbour whose slot for that kind of unit is free and that holds no
+  other civ's unit, civilian or city, else nothing. With nothing, buying the
+  unit is refused before any gold is spent, and finished production waits at
+  the head of the queue, progress kept, until room frees up. The original put
+  the unit on the city tile regardless, so two units shared one tile and a
+  tile pointed at only one of them; a game reloaded from its snapshot then
+  differed from the live one, which broke replays.
+- **No victory while a civ can still found.** A civ with no original capital
+  but a settler keeps the game open. Without that, in an all-human game the
+  first civ to found held every original capital there was and won on turn 2.
+  A civ with neither city nor settler can never found and does not count.
 
 ### Engine API
 
@@ -513,7 +531,11 @@ turn or seat.
 - **Creating a game.** `POST /api/games` (`src/game/routes.js`) with four
   seats, each `human`, `open` or `ai` with a difficulty, an optional seed and
   a turn-time key. Exactly one seat is human and it is the requester's. Every
-  key is checked against `src/shared/settings.js`, never trusted. With no open
+  key is checked against `src/shared/settings.js`, never trusted. A
+  difficulty is the AI's handicap, so only an `ai` seat keeps one: a human or
+  open seat is stored as `prince` whatever the request says, and the start
+  gives every non-AI seat `prince` too, so no person ever plays with the AI's
+  bonuses. With no open
   seat the game starts at once; otherwise it waits in the lobby as a table
   (see "Playing together"). Starting builds the engine from the seed, lets the
   AI seats before the first human seat take their turn, and writes the seats
@@ -534,7 +556,7 @@ turn or seat.
   messages are cleared (they went out with the previous state), the shared
   validator applies the action, the AI seats up to the next human play at once
   (`runCpuTurns`) so the next human sees the whole round, victory is checked,
-  the next turn's deadline is computed, `seq` increments, and the snapshot,
+  the deadline is computed if the turn changed hands, `seq` increments, and the snapshot,
   the row's summary columns, the action row and any seat change are written in
   one transaction (`commit` in `rooms.js`; the same path serves the server's
   own `timeout` and `leave` actions). If the write fails the room is rebuilt
@@ -579,7 +601,10 @@ ack would be dropped and leave the page locked.
 
 - **Selection is by id**, re-resolved after every snapshot: our unit with
   moves left stays selected, so a move keeps the unit under the cursor; a unit
-  out of moves, a dead unit or someone else's is dropped.
+  out of moves, a dead unit or someone else's is dropped. A tile may hold our
+  military unit, civilian and city at once: the first click selects the first
+  of them, each further click on the same tile the next, round and round, so
+  a garrison never hides its city's panel.
 - **Input is locked** when it is not our turn: the action buttons, the
   production list and the tech tree still show, but send nothing, and the
   status line says whose turn it is ("Waiting for Greece (AI)…"). A spectator
@@ -650,7 +675,9 @@ Each table has a `turnTime` key from `settings.TURN_TIMES` (default `3m`;
 `none` means no clock). When a human seat's turn begins, the room computes
 `deadline` (now plus the turn time; null for AI seats, for `none` and for
 games that are over) and writes it to `turn_deadline` in the same transaction
-as the action that began the turn. Every `DEADLINE_SWEEP_MS` (1 s)
+as the action that began the turn. Actions within the turn leave it alone:
+the clock measures the whole turn, not the time since the last move, which
+would let a player hold the turn forever with a move a minute. Every `DEADLINE_SWEEP_MS` (1 s)
 `sweepDeadlines` ends every human turn whose deadline has passed: the server
 applies `endTurn` for the seat (an action row of type `timeout`, user null),
 counts a missed turn on the seat, and at `MISSED_TURN_LIMIT` (3) hands the seat

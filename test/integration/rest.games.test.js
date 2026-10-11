@@ -6,6 +6,7 @@
 const { describe, test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const { startServer, client, registerUser, db } = require("../helpers/server");
+const { deserializeGame } = require("../../src/shared/snapshot");
 
 let srv;
 before(async () => { srv = await startServer(); });
@@ -108,5 +109,30 @@ describe("GET /api/games", () => {
     assert.equal((await bob.c.get("/api/games/999999")).status, 404);
     assert.equal((await bob.c.get("/api/games/abc")).status, 404);
     assert.equal((await client(srv.baseUrl).get("/api/games")).status, 401);
+  });
+});
+
+describe("difficulty", () => {
+  test("only an AI seat gets one; a person plays at prince, whatever the request says", async () => {
+    const { c } = await registerUser(srv.baseUrl, "sly");
+    const { c: guest } = await registerUser(srv.baseUrl, "joiner");
+    const res = await c.post("/api/games", {
+      seats: [{ kind: "human", difficulty: "emperor" }, { kind: "open", difficulty: "emperor" }, { kind: "ai", difficulty: "emperor" }, AI],
+    });
+    assert.equal(res.status, 201);
+    const id = res.body.id;
+    const seats = db().prepare("SELECT seat, difficulty FROM game_seats WHERE game_id = ? ORDER BY seat").all(id);
+    assert.deepEqual(seats.map((s) => s.difficulty), ["prince", "prince", "emperor", "king"]);
+
+    // A row from before the rule: the start ignores it on a person's seat.
+    db().prepare("UPDATE game_seats SET difficulty = 'emperor' WHERE game_id = ? AND seat IN (0, 1)").run(id);
+    assert.equal((await guest.post(`/api/games/${id}/seats/1/join`)).status, 200);
+    assert.equal((await c.post(`/api/games/${id}/start`)).status, 200);
+    const snapshot = JSON.parse(db().prepare("SELECT snapshot FROM games WHERE id = ?").get(id).snapshot);
+    assert.deepEqual(snapshot.setup.difficultyFlags, ["prince", "prince", "emperor", "king"]);
+    const { civs } = deserializeGame(snapshot);
+    assert.equal(civs[0].prodMult, 1);
+    assert.equal(civs[1].prodMult, 1);
+    assert.equal(civs[2].prodMult, 1.5);
   });
 });

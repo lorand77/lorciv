@@ -1061,6 +1061,9 @@ function clearMessages() {
 
 document.getElementById('end-turn-btn').addEventListener('click', () => send({ type: 'endTurn' }));
 
+// A visit to the lobby, not a leave: the seat and the game stay as they are.
+document.getElementById('lobby-btn').addEventListener('click', () => { location.href = '/lobby.html'; });
+
 document.getElementById('stats-btn').addEventListener('click', () => {
     const so = document.getElementById('stats-overlay');
     if (so.classList.contains('hidden')) openStats();

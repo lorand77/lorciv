@@ -71,3 +71,15 @@ CREATE TABLE IF NOT EXISTS game_actions (
   created_at TEXT    NOT NULL DEFAULT (datetime('now')),
   UNIQUE (game_id, seq)
 );
+
+-- In-game chat, one room per game for players and spectators alike. Kept so
+-- the people in a game can talk; swept CHAT_RETENTION_DAYS after the game
+-- ends (src/db/retention.js).
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id    INTEGER NOT NULL REFERENCES games(id),
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  text       TEXT    NOT NULL,
+  created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_chat_game ON chat_messages (game_id, id);

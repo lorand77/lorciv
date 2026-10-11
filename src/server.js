@@ -2,11 +2,12 @@
 
 // The entry point: builds the app (src/app.js) and listens. Process-level
 // concerns live here and only here, because the tests boot app.js directly:
-// crash and signal handling.
+// crash and signal handling, and the chat retention sweep.
 
 const config = require("./config");
 const log = require("./log");
 const { createServer } = require("./app");
+const { startChatRetention } = require("./db/retention");
 const { version } = require("../package.json");
 
 // An uncaught error leaves the process in an unknown state: log it, with its
@@ -27,6 +28,9 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
     process.exit(0);
   });
 }
+
+// Drop chat from long-finished games, now and once a day after.
+startChatRetention();
 
 const { server } = createServer();
 

@@ -26,7 +26,7 @@ describe("POST /api/games", () => {
       ["three seats", { seats: SEATS.slice(0, 3) }, /4 seats/],
       ["two humans", { seats: [{ kind: "human" }, { kind: "human" }, AI, AI] }, /Exactly one seat/],
       ["no human", { seats: [AI, AI, AI, AI] }, /Exactly one seat/],
-      ["unknown kind", { seats: [{ kind: "human" }, { kind: "robot" }, AI, AI] }, /human or ai/],
+      ["unknown kind", { seats: [{ kind: "human" }, { kind: "robot" }, AI, AI] }, /human, open or ai/],
       ["unknown difficulty", { seats: [{ kind: "human" }, { kind: "ai", difficulty: "deity" }, AI, AI] }, /difficulty/],
       ["unknown turn time", { seats: SEATS, turnTime: "1w" }, /turn time/],
     ];
@@ -41,6 +41,7 @@ describe("POST /api/games", () => {
     const { c, user } = await registerUser(srv.baseUrl, "host");
     const res = await c.post("/api/games", { seats: SEATS, seed: 4242, turnTime: "10m" });
     assert.equal(res.status, 201);
+    assert.equal(res.body.status, "active", "no open seat: it starts at once");
     const id = res.body.id;
     assert.ok(Number.isInteger(id));
 

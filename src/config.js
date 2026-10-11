@@ -35,6 +35,17 @@ module.exports = {
   REGISTER_MAX: intEnv("REGISTER_MAX", 5),
   HASH_MAX_CONCURRENT: intEnv("HASH_MAX_CONCURRENT", 2),
 
+  // How often the server looks for human turns whose time has run out
+  // (src/game/rooms.js). Turn times are minutes to days, so a second is fine.
+  DEADLINE_SWEEP_MS: intEnv("DEADLINE_SWEEP_MS", 1000),
+
+  // A game or table nobody has touched for this long is aborted, so a table
+  // whose host never came back does not sit in the lobby for ever.
+  ABANDON_DAYS: intEnv("ABANDON_DAYS", 30),
+
+  // How long in-game chat is kept after a game ends. -1 keeps it for ever.
+  CHAT_RETENTION_DAYS: intEnv("CHAT_RETENTION_DAYS", 30),
+
   // How much the server logs: silent, error, warn, info or debug (src/log.js).
   // An unknown value logs a warning and falls back to info.
   LOG_LEVEL: process.env.LOG_LEVEL || "info",

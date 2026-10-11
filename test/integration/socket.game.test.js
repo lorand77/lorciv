@@ -155,9 +155,9 @@ test("a game survives a server restart: the first join rebuilds the room from th
   socket.close();
 
   await srv.close();
-  srv = await startServer();
   const logs = captureLogs();
   t.after(() => logs.restore());
+  srv = await startServer(); // every active game is rebuilt at boot
   const again = await connectSocket(srv.baseUrl, player.c.cookie());
   t.after(() => again.close());
   const joined = await emitAck(again, "game:join", { gameId });

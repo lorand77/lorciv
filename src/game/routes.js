@@ -1,6 +1,7 @@
 "use strict";
 
-// REST side of games: creating one and listing them. Playing happens over the
+// REST side of games: tables in the lobby (create, take or give up a seat,
+// start, cancel) and the lists the lobby page shows. Playing happens over the
 // socket (src/game/socket.js); the rooms (src/game/rooms.js) hold the state.
 // Mounted at /api/games.
 
@@ -12,11 +13,11 @@ const { requireAuth } = require("../auth/middleware");
 const settings = require("../shared/settings");
 
 const router = express.Router();
+router.use(requireAuth);
 
-// The seats of a new game, or an error message. Today a game has exactly one
-// human seat, the requester's; open seats for other people come with the
-// lobby (M3). Kinds and difficulties are checked against the shared lists,
-// never trusted.
+// The seats of a new table, or an error message. Exactly one seat is the
+// requester's; the others are open (for someone in the lobby) or AI with a
+// difficulty. Kinds and difficulties are checked against the shared lists.
 function parseSeats(input, userId) {
   if (!Array.isArray(input) || input.length !== settings.SEATS) {
     return { error: `A game has ${settings.SEATS} seats.` };
@@ -24,18 +25,38 @@ function parseSeats(input, userId) {
   const seats = [];
   for (let i = 0; i < input.length; i++) {
     const s = input[i] || {};
-    if (s.kind !== "human" && s.kind !== "ai") return { error: "A seat is human or ai." };
+    if (!["human", "open", "ai"].includes(s.kind)) return { error: "A seat is human, open or ai." };
     const difficulty = s.difficulty ?? "prince";
     if (!settings.DIFFICULTIES.includes(difficulty)) return { error: "Unknown difficulty." };
     seats.push({ seat: i, kind: s.kind, userId: s.kind === "human" ? userId : null, difficulty });
   }
   if (seats.filter((s) => s.kind === "human").length !== 1) {
-    return { error: "Exactly one seat is yours; the others are AI for now." };
+    return { error: "Exactly one seat is yours." };
   }
   return { seats };
 }
 
-router.post("/", requireAuth, (req, res) => {
+// How a rooms.js refusal answers over HTTP.
+const STATUS = {
+  no_such_game: 404, no_such_seat: 404, not_lobby: 409, seat_taken: 409, already_seated: 409,
+  not_host: 403, not_yours: 403, host: 409,
+};
+const MESSAGE = {
+  no_such_game: "No such game.", no_such_seat: "No such seat.", not_lobby: "That game has started.",
+  seat_taken: "That seat is taken.", already_seated: "You already have a seat in this game.",
+  not_host: "Only the host can do that.", not_yours: "That is not your seat.",
+  host: "The host cannot leave; cancel the table instead.",
+};
+function refuse(res, error) {
+  return res.status(STATUS[error] ?? 400).json({ error: MESSAGE[error] ?? "Refused." });
+}
+
+function withMine(row, userId) {
+  const mine = queries.getSeats.all(row.id).find((s) => s.user_id === userId);
+  return { ...rooms.summary(row), seed: row.seed, mySeat: mine ? mine.seat : null };
+}
+
+router.post("/", (req, res) => {
   const body = req.body || {};
   const parsed = parseSeats(body.seats, req.session.userId);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
@@ -43,27 +64,72 @@ router.post("/", requireAuth, (req, res) => {
   if (!settings.turnTimeOf(turnTime)) return res.status(400).json({ error: "Unknown turn time." });
   const seed = Number.isInteger(body.seed) && body.seed >= 0 ? body.seed >>> 0 : crypto.randomInt(0, 0x7fffffff);
 
-  const room = rooms.createGame({
+  const { gameId, status } = rooms.createGame({
     hostId: req.session.userId,
     seats: parsed.seats,
     seed,
     settings: { turnTime },
   });
-  return res.status(201).json({ id: room.gameId });
+  return res.status(201).json({ id: gameId, status });
 });
 
-router.get("/", requireAuth, (req, res) => {
+// The games and tables the user holds a seat in, newest activity first.
+router.get("/", (req, res) => {
   const rows = queries.listGamesForUser.all(req.session.userId);
   return res.json(rows.map((row) => ({ ...rooms.summary(row), mySeat: row.my_seat })));
 });
 
+// Tables with an open seat.
+router.get("/open", (req, res) => {
+  return res.json(queries.listOpenTables.all().map((row) => withMine(row, req.session.userId)));
+});
+
+// Games being played, to watch.
+router.get("/live", (req, res) => {
+  return res.json(queries.listLiveGames.all().map((row) => withMine(row, req.session.userId)));
+});
+
 // Anyone signed in may look at any game: spectating is open.
-router.get("/:id", requireAuth, (req, res) => {
+router.get("/:id", (req, res) => {
   const id = Number(req.params.id);
   const row = Number.isInteger(id) ? queries.getGameById.get(id) : null;
-  if (!row) return res.status(404).json({ error: "No such game." });
-  const mine = queries.getSeats.all(id).find((s) => s.user_id === req.session.userId);
-  return res.json({ ...rooms.summary(row), seed: row.seed, settings: JSON.parse(row.settings), mySeat: mine ? mine.seat : null });
+  if (!row) return refuse(res, "no_such_game");
+  return res.json(withMine(row, req.session.userId));
+});
+
+function seatParams(req) {
+  const id = Number(req.params.id);
+  const seat = Number(req.params.seat);
+  return { id: Number.isInteger(id) ? id : -1, seat: Number.isInteger(seat) ? seat : -1 };
+}
+
+router.post("/:id/seats/:seat/join", (req, res) => {
+  const { id, seat } = seatParams(req);
+  const user = queries.getUserById.get(req.session.userId);
+  const out = rooms.joinSeat(id, seat, user);
+  if (out.error) return refuse(res, out.error);
+  return res.json(withMine(queries.getGameById.get(id), req.session.userId));
+});
+
+router.post("/:id/seats/:seat/leave", (req, res) => {
+  const { id, seat } = seatParams(req);
+  const out = rooms.leaveSeat(id, seat, req.session.userId);
+  if (out.error) return refuse(res, out.error);
+  return res.json(withMine(queries.getGameById.get(id), req.session.userId));
+});
+
+router.post("/:id/start", (req, res) => {
+  const id = Number(req.params.id);
+  const out = rooms.startGame(Number.isInteger(id) ? id : -1, req.session.userId);
+  if (out.error) return refuse(res, out.error);
+  return res.json({ id, status: "active" });
+});
+
+router.delete("/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const out = rooms.cancelTable(Number.isInteger(id) ? id : -1, req.session.userId);
+  if (out.error) return refuse(res, out.error);
+  return res.json({ ok: true });
 });
 
 module.exports = router;

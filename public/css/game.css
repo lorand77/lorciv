@@ -308,3 +308,26 @@ button.danger {
 #status-line.mine { color: #6ed48a; font-weight: 600; }
 #conn-status { font-size: 11px; color: #ff9f6e; margin-bottom: 6px; }
 #end-turn-btn:disabled { opacity: 0.5; }
+
+/* ---- Players ---- */
+#players-list { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.player-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 3px; color: #bbb; }
+.player-row.current { background: #1a2a1e; color: #eee; }
+.player-row .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-row .mark { color: #6ed48a; font-size: 10px; }
+.player-row .missed { color: #ff9f6e; font-size: 11px; }
+.player-row.eliminated { color: #666; text-decoration: line-through; }
+
+/* ---- Chat ---- */
+#chat-log { max-height: 140px; overflow-y: auto; font-size: 12px; line-height: 1.45; display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+.chat-line .chat-who { color: #e8d48b; font-weight: 600; margin-right: 4px; }
+.chat-line.mine .chat-who { color: #6ed48a; }
+.chat-line .chat-text { color: #ccc; word-break: break-word; }
+#chat-input { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid #2e4060; border-radius: 3px; color: #eee; font-size: 12px; padding: 4px 6px; }
+#chat-input:focus { outline: none; border-color: #5080d0; }
+
+/* ---- Bottom buttons ---- */
+.btn-row { display: flex; gap: 6px; margin-bottom: 6px; }
+.btn-row button { flex: 1; }
+#status-line .countdown { color: #e8d48b; font-variant-numeric: tabular-nums; margin-left: 6px; }
+#status-line .countdown.low { color: #ff6464; }

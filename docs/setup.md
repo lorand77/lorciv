@@ -145,6 +145,10 @@ only to change it:
 - `DB_PATH` — the SQLite file (default `data/lorciv.sqlite` in the project).
 - `DEACTIVATION_SWEEP_MS` — how often sockets of deactivated accounts are
   disconnected (default 30000, i.e. 30 s).
+- `DEADLINE_SWEEP_MS` — how often expired human turns are ended (default 1000).
+- `ABANDON_DAYS` — tables and games untouched this long are aborted (default 30).
+- `CHAT_RETENTION_DAYS` — how long in-game chat is kept after a game ends;
+  `-1` keeps it for ever (default 30).
 - `LOGIN_MAX_FAILURES`, `REGISTER_MAX`, `AUTH_WINDOW_MS` — failed logins and
   new accounts allowed per client IP within the window (default 10, 5 and
   900000, i.e. 15 min); past that, 429 until the window moves on.

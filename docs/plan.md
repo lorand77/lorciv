@@ -307,7 +307,7 @@ describe what now exists.
   the old game with its brain moved to the server, and the milestone that
   proves the architecture.
 
-### M3 — Multiplayer (large)
+### M3 — Multiplayer (large) — done 2026-10-11
 
 - `lobby.html` and `lobby.js`: tables, seats, presence, my games, watch list.
 - Turn timers, missed turns, AI takeover, `leave`.

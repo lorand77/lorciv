@@ -14,8 +14,12 @@ const config = require("../config");
 const rooms = require("./rooms");
 
 // Everyone looking at a game, players and spectators, sits in this room and
-// receives every state broadcast.
+// receives every state broadcast and every chat message.
 const gameRoom = (gameId) => `game:${gameId}`;
+// Everyone on the lobby page: told when the lists changed, and who is about.
+const LOBBY = "lobby";
+const CHAT_MAX = 300;
+const CHAT_HISTORY = 50;
 
 // One room per user, so a message for a person reaches every tab they have
 // open instead of whichever socket we happened to pick.
@@ -51,6 +55,17 @@ function attachSockets(httpServer) {
       if (queries.isDeactivated.get(socket.userId)) socket.disconnect(true);
     }
   }), config.DEACTIVATION_SWEEP_MS).unref();
+
+  // rooms.js knows nothing about sockets; it says what happened and this
+  // module tells the people concerned.
+  rooms.events.on("state", (room) => broadcastState(io, room));
+  rooms.events.on("lobby", () => io.to(LOBBY).emit("lobby:changed"));
+  rooms.events.on("turn", (room) => {
+    const s = room.seats[room.game.currentPlayer];
+    if (s && s.kind === "human") {
+      io.to(userRoom(s.userId)).emit("turn:yours", { gameId: room.gameId, deadline: room.deadline });
+    }
+  });
 
   io.engine.use(sessionMiddleware);
 
@@ -93,10 +108,16 @@ function attachSockets(httpServer) {
       });
     };
 
+    on("lobby:enter", () => { socket.join(LOBBY); sendPresence(io); });
     on("game:join", (payload, ack) => handleJoin(io, socket, payload, ack));
     on("game:action", (payload, ack) => handleAction(io, socket, payload, ack));
+    on("game:leave", (payload, ack) => handleLeave(io, socket, payload, ack));
+    on("chat:send", (payload, ack) => handleChat(io, socket, payload, ack));
 
-    on("disconnect", (reason) => socket.log.info("socket.disconnect", { reason }));
+    on("disconnect", (reason) => {
+      socket.log.info("socket.disconnect", { reason });
+      sendPresence(io);
+    });
   });
 
   return io;
@@ -107,16 +128,55 @@ function roomFor(payload) {
   return Number.isInteger(gameId) ? rooms.getRoom(gameId) : null;
 }
 
-// Join a game's room and get its full state. A user with a seat plays; anyone
-// else watches (mySeat null). The same event resumes after a reload or a
-// reconnect, so the client never needs a separate "catch me up".
+// Who is on the lobby page, once per person however many tabs.
+function sendPresence(io) {
+  const ids = io.sockets.adapter.rooms.get(LOBBY);
+  const seen = new Map();
+  for (const id of ids ?? []) {
+    const s = io.sockets.sockets.get(id);
+    if (s && !seen.has(s.userId)) seen.set(s.userId, { userId: s.userId, username: s.username });
+  }
+  io.to(LOBBY).emit("lobby:presence", [...seen.values()]);
+}
+
+// Join a game's room and get its full state plus the recent chat. A user with
+// a seat plays; anyone else watches (mySeat null). The same event resumes after
+// a reload or a reconnect, so the client never needs a separate "catch me up".
 function handleJoin(io, socket, payload, ack) {
   const room = roomFor(payload);
-  if (!room) return reply(ack, { ok: false, error: "no_such_game" });
-  const seat = rooms.seatOf(room, socket.userId);
+  if (!room) {
+    const gameId = Number(payload?.gameId);
+    const row = Number.isInteger(gameId) ? queries.getGameById.get(gameId) : null;
+    return reply(ack, { ok: false, error: row && row.status === "lobby" ? "not_started" : "no_such_game" });
+  }
   socket.join(gameRoom(room.gameId));
-  socket.log.debug("game.join", { game: room.gameId, seat });
-  reply(ack, { ok: true, state: rooms.viewFor(room, seat) });
+  socket.log.debug("game.join", { game: room.gameId, seat: rooms.seatOf(room, socket.userId) });
+  const state = rooms.viewFor(room, socket.userId);
+  state.chat = queries.listChat.all(room.gameId, CHAT_HISTORY).reverse().map(chatView);
+  reply(ack, { ok: true, state });
+}
+
+// A player hands their seat to the AI for good.
+function handleLeave(io, socket, payload, ack) {
+  const room = roomFor(payload);
+  if (!room) return reply(ack, { ok: false, error: "no_such_game" });
+  reply(ack, rooms.leaveGame(room, socket.userId));
+}
+
+const chatView = (m) => ({ id: m.id, userId: m.user_id, username: m.username, text: m.text, at: m.created_at });
+
+// Chat goes to everyone in the game's room, players and spectators alike; the
+// sender must have joined the game. The text is never logged.
+function handleChat(io, socket, payload, ack) {
+  const room = roomFor(payload);
+  if (!room) return reply(ack, { ok: false, error: "no_such_game" });
+  if (!socket.rooms.has(gameRoom(room.gameId))) return reply(ack, { ok: false, error: "not_joined" });
+  const text = typeof payload?.text === "string" ? payload.text.trim() : "";
+  if (!text || text.length > CHAT_MAX) return reply(ack, { ok: false, error: "bad_text" });
+  const info = queries.insertChat.run(room.gameId, socket.userId, text);
+  const msg = chatView(queries.getChatById.get(Number(info.lastInsertRowid)));
+  io.to(gameRoom(room.gameId)).emit("chat:message", { gameId: room.gameId, ...msg });
+  reply(ack, { ok: true });
 }
 
 // A player's action: seat, freshness, then the shared validator inside
@@ -129,16 +189,15 @@ function handleAction(io, socket, payload, ack) {
   if (seat === null) return reply(ack, { ok: false, error: "not_seated" });
   if (payload.seq !== room.seq) {
     reply(ack, { ok: false, error: "stale", seq: room.seq });
-    socket.emit("game:state", rooms.viewFor(room, seat));
+    socket.emit("game:state", rooms.viewFor(room, socket.userId));
     return;
   }
   const action = {
     type: payload.type, unitId: payload.unitId, cityId: payload.cityId,
     q: payload.q, r: payload.r, key: payload.key,
   };
-  const res = rooms.applyPlayerAction(room, seat, socket.userId, action);
-  reply(ack, res);
-  if (res.ok) broadcastState(io, room);
+  // On success rooms.js emits "state" and the room is broadcast from there.
+  reply(ack, rooms.applyPlayerAction(room, seat, socket.userId, action));
 }
 
 // Each socket gets its own view (rooms.viewFor), so a per-seat filter such as
@@ -148,7 +207,7 @@ function broadcastState(io, room) {
   if (!ids) return;
   for (const id of ids) {
     const s = io.sockets.sockets.get(id);
-    if (s) s.emit("game:state", rooms.viewFor(room, rooms.seatOf(room, s.userId)));
+    if (s) s.emit("game:state", rooms.viewFor(room, s.userId));
   }
 }
 

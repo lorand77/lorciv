@@ -14,14 +14,14 @@ the database layer, the page shell) were copied from there and are now its own.
 
 ## Where things stand
 
-Milestones M0 to M2 of the plan are done: accounts and sessions work; the
-engine lives in `src/shared/`; the server runs games in rooms, with one human
-seat and three AI seats per game, persisted after every action; the lobby
-starts a game and lists yours; the game page plays it through the server and
-survives a reload and a server restart. **Not yet:** several humans in one
-game, open seats, turn timers, AI takeover of an absent player (all M3). The
-sections below describe what exists. The last section lists what has been
-decided but not built.
+Milestones M0 to M3 of the plan are done: accounts and sessions work; the
+engine lives in `src/shared/`; the server runs games in rooms, persisted after
+every action and rebuilt at boot; tables in the lobby seat up to four people
+with AI in the other seats; turn timers end an absent player's turn and hand
+the seat to the AI after too many misses; the game page plays through the
+server with chat and survives a reload and a server restart. **Not yet:**
+production deployment (M4), and the polish of M5. The sections below describe
+what exists. The last section lists what has been decided but not built.
 
 ## Tech stack
 
@@ -41,7 +41,8 @@ src/
   auth/        routes (register, login, logout, me), session, middleware,
                throttle, usernamePolicy
   db/          index.js (open, schema, migrations), schema.sql, queries.js,
-               reset.js and the user CLI scripts (setPassword, deactivate)
+               retention.js (the chat sweep), reset.js and the user CLI
+               scripts (setPassword, deactivate)
   game/        rooms.js (live games: engine, seats, persistence), socket.js
                (every Socket.IO event), routes.js (/api/games)
   shared/      the engine, served at /js/ ahead of public/ (see "The engine")
@@ -182,11 +183,19 @@ Events:
   `user`/`name` from `socket.log`; `socket.handler_failed` (`error`, the
   per-event wrapper: `event`, `err`) and `socket.task_failed` (`error`,
   `safely`: `task`, `err`).
-- **Games:** `game.create` (`game`, `host`, `seed`, `seats`), `game.resume`
+- **Games:** `game.table` (`game`, `host`, `seed`, `seats`: a table created),
+  `game.join_seat`, `game.leave_seat` (`game`, `seat`, `user`), `game.cancel`,
+  `game.start` (`game`, `host`, `seed`, `turn_time`, `seats`), `game.resume`
   (`game`, `seq`, `turn`, `status`: a room rebuilt from the database),
-  `game.over` (`game`, `winner`, `turn`, `seq`), `game.persist_failed`
-  (`error`: the write after an action failed and the room was rolled back),
-  and `game.join` at `debug`. No line per action.
+  `game.timeout` (`game`, `seat`, `user`, `missed`: a turn the server ended),
+  `game.takeover` (`game`, `seat`, `user`, `reason=timeout|leave`), `game.over`
+  (`game`, `winner`, `turn`, `seq`), `game.abort` (`game`, `reason=no_humans`),
+  `game.abandon_sweep` (`aborted`, `days`), `game.persist_failed` (`error`: the
+  write after an action failed and the room was rolled back),
+  `game.sweep_failed` (`error`), and `game.join` at `debug`. No line per action.
+- **Process, continued:** `process.resumed` (`games`: active games rebuilt at boot).
+- **Chat:** `chat.retention` (`removed`, `days`), `chat.retention_failed`
+  (`error`). Never the text.
 - **Data:** `db.migrated` (`added=<table>.<column>`), `db.case_duplicates`
   (`warn`, `names`).
 
@@ -197,7 +206,7 @@ What is never logged, and where personal data may appear:
 - **IPs** appear only on the `auth.*` lines above, for dealing with password
   guessing and mass sign-ups. Never on requests, sockets or games.
 - **Never:** passwords or hashes, session ids, cookies, request bodies, query
-  strings, uploaded content. As a safety net the logger writes any field named
+  strings, chat text. As a safety net the logger writes any field named
   `password`, `hash`, `cookie`, `session` or `secret` as `[redacted]`.
 
 ## Database
@@ -212,11 +221,14 @@ Tables: `users` (id, username, password_hash, created_at, deactivated_at);
 `sessions`, which the session store creates itself; `games` (status, host,
 seed, settings JSON, the snapshot JSON, seq, turn, current seat, deadline,
 winner, timestamps), `game_seats` (one row per seat: open, human or ai, the
-user, the difficulty, missed turns) and `game_actions` (every player action in
-order, as JSON). The snapshot column is overwritten after every action; it is
+user, the difficulty, missed turns), `game_actions` (every player action in
+order, as JSON, plus the server's `timeout` and `leave` rows) and
+`chat_messages`. The snapshot column is overwritten after every action; it is
 what a room is rebuilt from. The action rows are an audit trail and the raw
 material for replays; AI turns are not rows, since they follow
-deterministically from the end of turn that triggered them.
+deterministically from the end of turn that triggered them. Chat is swept
+`CHAT_RETENTION_DAYS` after a game ends (`src/db/retention.js`, started from
+`src/server.js` so the tests do not run it on their own).
 
 ## Sockets
 
@@ -228,8 +240,12 @@ person has open), the deactivation sweep, and the `on()` wrapper that catches a
 handler's exception, logs it and fails the caller's ack. Socket.IO runs
 listeners with no try/catch of its own and better-sqlite3 throws
 synchronously, so without the wrapper one bad event would take the process,
-and every live game, down. The game events are `game:join` and `game:action`,
-described under "The game on the server".
+and every live game, down. The game events are `game:join`, `game:action`,
+`game:leave` and `chat:send`, and the lobby's `lobby:enter`, described under
+"The game on the server" and "Playing together". The module also listens to
+`rooms.events` and does the telling: `game:state` to every socket in a game's
+room with its own view, `lobby:changed` to the lobby room, `turn:yours` to the
+`user:<id>` room of the seat whose turn began.
 
 ## Pages and the shell
 
@@ -242,9 +258,10 @@ light scheme behind `<html data-scheme="light">`; nothing sets it yet, and
 there is no settings page. There is no theme customisation: that was
 LorChess's board colours and piece images, which have no counterpart here.
 
-`lobby.html` (`lobby.js`) has the new-game form and the list of the user's
-games; `game.html` (`ui.js`, `game.css`) is the game. Both are described under
-"The game on the server". The game page has no shell: the map wants the whole
+`lobby.html` (`lobby.js`) is the lobby: open tables, a form for a new table,
+the user's games, live games to watch, who is online. `game.html` (`ui.js`,
+`game.css`) is the game. Both are described under "The game on the server" and
+"Playing together". The game page has no shell: the map wants the whole
 viewport, so its sidebar carries the link back to the lobby and the user bar.
 
 ## Terms and privacy
@@ -257,16 +274,17 @@ Acceptance is implied by registering and is not recorded.
 
 The privacy policy states facts that the code and operations decide. If one of
 these changes, update the page and its date in the same commit: what is
-stored (the account, the session, and the games a player takes part in with
-every action and the result, visible to every signed-in player since
-spectating is open); sessions last 7 days
+stored (the account, the session, the games a player takes part in with every
+action and the result, visible to every signed-in player since spectating is
+open, and in-game chat, seen by everyone in the game and deleted
+`CHAT_RETENTION_DAYS` after it ends); sessions last 7 days
 (`src/auth/session.js`); IPs live in the throttle's memory for
 `AUTH_WINDOW_MS` (15 min) and are written only on the `auth.*` log lines;
 what the logs hold and their 14-day lifetime (log rotation, `docs/setup.md`);
 nothing is visible when signed out; there is no analytics. The page also
 promises nightly backups to Backblaze B2 kept for at most 90 days, which M4
 sets up; check it again then. The contact address is `lorciv@lorand77.dev`.
-When chat arrives (M3), "What we store" and "Who can see it" must grow with it.
+The page describes the game as it is after M3; M4 sets up the backups it promises.
 
 ## The engine: `src/shared/`
 
@@ -451,15 +469,16 @@ the JSON last written to the database. Clients are never trusted for legality,
 turn or seat.
 
 - **Creating a game.** `POST /api/games` (`src/game/routes.js`) with four
-  seats, each `human` or `ai` with a difficulty, an optional seed and a
-  turn-time key. Exactly one seat is human and it is the requester's; open
-  seats for other people come with the lobby (M3). Every key is checked
-  against `src/shared/settings.js`, never trusted. The room builds the engine
-  from the seed and writes the games row, the seats and the first snapshot in
-  one transaction; the page then navigates to `game.html?id=<id>`.
-  `GET /api/games` lists the games the user holds a seat in, newest activity
-  first; `GET /api/games/:id` is readable by anyone signed in, because
-  spectating is open.
+  seats, each `human`, `open` or `ai` with a difficulty, an optional seed and
+  a turn-time key. Exactly one seat is human and it is the requester's. Every
+  key is checked against `src/shared/settings.js`, never trusted. With no open
+  seat the game starts at once; otherwise it waits in the lobby as a table
+  (see "Playing together"). Starting builds the engine from the seed, lets the
+  AI seats before the first human seat take their turn, and writes the seats
+  and the first snapshot; the page then navigates to `game.html?id=<id>`.
+  `GET /api/games` lists the games and tables the user holds a seat in,
+  newest activity first; `GET /api/games/:id` is readable by anyone signed
+  in, because spectating is open.
 - **Joining.** `game:join {gameId}` answers with the full state
   (`rooms.viewFor`): the sequence number `seq`, status, winner, settings, the
   seats with their players' names, the caller's own seat (`null` for a
@@ -471,10 +490,12 @@ turn or seat.
   the room's with `stale` and sends that socket the current state, so nobody
   acts on an old view, then `rooms.applyPlayerAction`: the seat's pending
   messages are cleared (they went out with the previous state), the shared
-  validator applies the action, after an `endTurn` the AI seats play at once
+  validator applies the action, the AI seats up to the next human play at once
   (`runCpuTurns`) so the next human sees the whole round, victory is checked,
-  `seq` increments, and the snapshot, the row's summary columns and the action
-  row are written in one transaction. If the write fails the room is rebuilt
+  the next turn's deadline is computed, `seq` increments, and the snapshot,
+  the row's summary columns, the action row and any seat change are written in
+  one transaction (`commit` in `rooms.js`; the same path serves the server's
+  own `timeout` and `leave` actions). If the write fails the room is rebuilt
   from the last written snapshot and the player gets `server_error`. On
   success every socket in the room gets `game:state` with its own view, and
   the ack carries the engine's message (a combat result, a founded city).
@@ -486,10 +507,10 @@ turn or seat.
 - **Victory.** `game.winner` set: status `finished`, `winner_seat` and
   `finished_at` on the row, `game.over` in the log; further actions answer
   `game_over`.
-- **Restarts.** Nothing is in memory at boot. The first `game:join`, or any
-  lookup, rebuilds the room from the snapshot and the seats (`game.resume`).
-  Rebuilding every active game at boot comes with the timers in M3, which need
-  it; the turn-time setting is stored and shown but not enforced yet.
+- **Restarts.** `rooms.resumeAll()` runs when the app is built: every active
+  game is rebuilt from its snapshot and seats (`game.resume`), its deadline
+  read back, and the sweeps start. A game is never lost to a restart, and a
+  turn that ran out while the server was down ends on the first sweep.
 
 ### The game page
 
@@ -530,28 +551,93 @@ engine's own catalogues, so it offers exactly what the server accepts; and the
 list of your games with turn, whose turn it is and a link to play or view.
 Open seats, presence and watching other people's games come with M3.
 
+## Playing together: tables, timers, chat
+
+### Tables
+
+A game starts life as a **table**: a `games` row with status `lobby`, no
+snapshot and no room. The host's `POST /api/games` names the seats; the open
+ones wait for people. `GET /api/games/open` lists tables with an open seat.
+`POST /api/games/:id/seats/:seat/join` takes a seat (one per person per game;
+a taken seat, an AI seat or a started game answer 409),
+`POST .../seats/:seat/leave` gives it back (the host cannot leave; the host
+cancels the table with `DELETE /api/games/:id`). `POST /api/games/:id/start`,
+host only, turns the table into a game: open seats left become AI seats at the
+easiest level, the engine is built, the AI seats before the first human take
+their turn, the first snapshot and the first deadline are written, and the
+room exists from then on. The game page answers `not_started` for a table.
+Tables and games nobody has touched for `ABANDON_DAYS` are aborted, at boot and
+once an hour (`game.abandon_sweep`).
+
+The lobby page shows: a "Your turn" panel when a game waits for you; open
+tables with Join on their open seats, and Start or Cancel for the host, Leave
+for other players; the new-table form; your games; live games to watch; who is
+online. It sits in the `lobby` socket room: `lobby:changed` makes it refetch
+the lists (sent when a table changes or a game's status or turn changes, not
+on every move), `lobby:presence` is who is on the page, `turn:yours` refetches
+and, when the tab is in the background and the browser allows, shows a
+notification. A button asks for that permission; browsers only grant it on a
+click.
+
+### Turn timers
+
+Each table has a `turnTime` key from `settings.TURN_TIMES` (default `3m`;
+`none` means no clock). When a human seat's turn begins, the room computes
+`deadline` (now plus the turn time; null for AI seats, for `none` and for
+games that are over) and writes it to `turn_deadline` in the same transaction
+as the action that began the turn. Every `DEADLINE_SWEEP_MS` (1 s)
+`sweepDeadlines` ends every human turn whose deadline has passed: the server
+applies `endTurn` for the seat (an action row of type `timeout`, user null),
+counts a missed turn on the seat, and at `MISSED_TURN_LIMIT` (3) hands the seat
+to the AI (`game.takeover`): the seat's kind becomes `ai`, the civ's `isCpu`
+is set, and the AI plays it from then on. Acting resets the count.
+Disconnecting by itself does nothing: with games that may last days, the clock
+is the only judge of absence. `game:leave` hands a seat over at once, for good.
+A seat the AI took over keeps its `user_id`: the game stays in that person's
+list, and their view carries `formerSeat` so the page can say what happened.
+With no human seat left the game is **aborted** (`game.abort`,
+`reason=no_humans`) rather than played out by the AI, and it is aborted before
+the AI would have played, which matters: a whole AI game takes seconds.
+
+### Several humans in one game
+
+Seats take turns in seat order; the AI seats between two humans play the
+moment the human before them ends their turn, so each human sees everything
+that happened since their last move at once. A person may hold seats in any
+number of games. `turn:yours` reaches every tab a player has open.
+
+### Chat
+
+One chat per game, for players and spectators alike: this game has no hidden
+information for a spectator to leak. `chat:send {gameId, text}` from a socket
+that has joined the game, 1 to 300 characters after trimming, stored in
+`chat_messages` and sent to the game's room as `chat:message`; `game:join`
+returns the last 50 as `chat`. The text is never logged.
+`src/db/retention.js` deletes the chat of games that ended more than
+`CHAT_RETENTION_DAYS` ago (default 30; `-1` keeps it), at boot and daily.
+
+### The game page, continued
+
+A Players panel lists the seats with the civ, the player or "AI", a marker on
+the seat to move and the missed-turn count of an absent player; the status
+line carries the time left on the clock, red under thirty seconds; a Leave
+button hands the seat to the AI after a confirmation; a Chat panel shows the
+history and sends; `turn:yours` while the tab is in the background changes
+the title and, if allowed, shows a notification. A seat the AI took over, an
+abandoned game and a table that has not started each have their own status
+line.
+
 ## Decided, not yet built
 
-These decisions are made and the plan (`docs/plan.md`) builds on them. They
-move up into the sections above as the code lands.
+The plan (`docs/plan.md`) has these left:
 
-1. **Server-authoritative.** The server owns one engine instance per game;
-   clients send actions, the server validates, applies, persists and broadcasts.
-2. **Full snapshot after every action** (built, see "The game on the
-   server"); kept here because M3's timer expiry writes one too.
-3. **Sequential turns**, as the engine already does.
-4. **Games may span days**: resume from snapshot, a per-game turn timer
-   (presets none, 1 min, 3 min, 10 min, 1 h, 1 day, 3 days; default 3 min),
-   and a missed-turn limit (3) after which the seat is handed to the AI.
-5. **AI runs on the server**, on the main thread: a civ's turn takes 5 ms on
-   average and 57 ms at worst. `runCpuTurns` after a human's end of turn.
-6. **A user may be in several games at once.** Unlike LorChess's one-at-a-time.
-7. **All active games are rebuilt at boot**, not lazily, so turn timers re-arm
-   whether or not anyone is connected. Today a room is rebuilt on first use.
-8. **Always four civs**; empty seats are AI. The engine is hardcoded to four.
-9. **Single player versus AI goes through the server too.** No local mode. (Built.)
-10. **Broadcasts go through a per-seat view function** that returns everything
-    for now, so fog of war could be added in one place later. (Built.)
-11. **Tables waiting for players are `games` rows** with status `lobby`.
-12. **Hosting:** the LorChess EC2 instance, own user, own port (3001), own
-    database, behind the same Caddy, at `lorciv.lorand77.dev`.
+- **Hosting (M4):** the LorChess EC2 instance, own user, own port (3001),
+  own database, behind the same Caddy, at `lorciv.lorand77.dev`, with a nightly
+  backup to Backblaze B2 as the privacy policy promises.
+- **Polish (M5):** account deletion (built on deactivation, like LorChess's),
+  a finished-game page with the score graph, replays from the action rows, a
+  leaderboard, broadcasting after each AI civ if the round jump feels wrong,
+  touch and small-screen layout, and deleting `civ_lite-old/` and the
+  `lorchess/` reference copy.
+- Ideas kept for later: fog of war (the per-seat view function is the hook),
+  simultaneous turns, maps sized to the number of players, more civs.

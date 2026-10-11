@@ -1,19 +1,17 @@
 "use strict";
 
-// The lobby page: start a new game (one human seat, the rest AI, for now) and
-// list the games you hold a seat in. Civ names, colours, difficulties and turn
-// times come from the shared engine scripts, so the form offers exactly what
-// the server accepts (src/game/routes.js checks against the same lists).
+// The lobby page: open tables to join, a form for a new table, your games,
+// live games to watch, who is online. The lists come from /api/games; the
+// socket says when to refetch (lobby:changed), who is about (lobby:presence)
+// and when a turn of yours begins (turn:yours). Civ names, colours,
+// difficulties and turn times come from the shared engine scripts, so the
+// form offers exactly what the server accepts.
 
 (function () {
-  const rowsEl = document.getElementById("seat-rows");
-  const seedEl = document.getElementById("seed-input");
-  const turnEl = document.getElementById("turn-time");
-  const errEl = document.getElementById("new-game-error");
-  const listEl = document.getElementById("games-list");
-  const countEl = document.getElementById("games-count");
-
+  const $ = (id) => document.getElementById(id);
   const difficulty = Array.from({ length: SEATS }, () => "prince");
+  const seatKind = Array.from({ length: SEATS }, (_, i) => (i === 0 ? "human" : "ai"));
+  let me = null;
 
   function el(tag, cls, text) {
     const n = document.createElement(tag);
@@ -22,115 +20,247 @@
     return n;
   }
 
-  // Seat 0 is yours; the other seats are AI with a difficulty each.
+  function swatch(seat) {
+    const s = el("span", "swatch");
+    s.style.background = PLAYER_COLORS[seat];
+    return s;
+  }
+
+  async function api(method, path, body) {
+    const res = await fetch(path, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : {},
+      credentials: "same-origin",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+    return data;
+  }
+
+  // ---- new table form ----
+
   function renderSeats() {
-    rowsEl.innerHTML = "";
+    const rows = $("seat-rows");
+    rows.innerHTML = "";
     for (let i = 0; i < SEATS; i++) {
       const row = el("div", "seat-row");
-      const swatch = el("span", "swatch");
-      swatch.style.background = PLAYER_COLORS[i];
       const name = el("span", "name", PLAYER_NAMES[i]);
       name.style.color = PLAYER_COLORS[i];
-      row.append(swatch, name);
+      row.append(swatch(i), name);
       if (i === 0) {
         row.append(el("span", "muted", "You"));
       } else {
         const sel = document.createElement("select");
+        const open = document.createElement("option");
+        open.value = "open";
+        open.textContent = "Open seat";
+        sel.appendChild(open);
         for (const d of DIFFICULTIES) {
           const o = document.createElement("option");
-          o.value = d;
+          o.value = "ai:" + d;
           o.textContent = "AI · " + d.charAt(0).toUpperCase() + d.slice(1);
           sel.appendChild(o);
         }
-        sel.value = difficulty[i];
-        sel.addEventListener("change", () => { difficulty[i] = sel.value; });
+        sel.value = seatKind[i] === "open" ? "open" : "ai:" + difficulty[i];
+        sel.addEventListener("change", () => {
+          if (sel.value === "open") seatKind[i] = "open";
+          else { seatKind[i] = "ai"; difficulty[i] = sel.value.slice(3); }
+          $("start-btn").textContent = seatKind.includes("open") ? "Create table" : "Start game";
+        });
         row.append(sel);
       }
-      rowsEl.appendChild(row);
+      rows.appendChild(row);
     }
   }
 
-  function randomSeed() {
-    seedEl.value = Math.floor(Math.random() * 1000000);
-  }
+  function randomSeed() { $("seed-input").value = Math.floor(Math.random() * 1000000); }
 
   for (const t of TURN_TIMES) {
     const o = document.createElement("option");
     o.value = t.key;
     o.textContent = t.label;
-    turnEl.appendChild(o);
+    $("turn-time").appendChild(o);
   }
-  turnEl.value = DEFAULT_TURN_TIME;
+  $("turn-time").value = DEFAULT_TURN_TIME;
   renderSeats();
   randomSeed();
-  document.getElementById("seed-random").addEventListener("click", randomSeed);
+  $("seed-random").addEventListener("click", randomSeed);
 
-  document.getElementById("start-btn").addEventListener("click", async () => {
-    errEl.textContent = "";
+  $("start-btn").addEventListener("click", async () => {
+    const err = $("new-game-error");
+    err.textContent = "";
     const seats = Array.from({ length: SEATS }, (_, i) =>
-      i === 0 ? { kind: "human" } : { kind: "ai", difficulty: difficulty[i] });
-    const seed = parseInt(seedEl.value, 10);
-    const body = { seats, turnTime: turnEl.value };
+      i === 0 ? { kind: "human" } : seatKind[i] === "open" ? { kind: "open" } : { kind: "ai", difficulty: difficulty[i] });
+    const seed = parseInt($("seed-input").value, 10);
+    const body = { seats, turnTime: $("turn-time").value };
     if (Number.isInteger(seed) && seed >= 0) body.seed = seed;
     try {
-      const res = await fetch("/api/games", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify(body),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { errEl.textContent = data.error || "Could not start the game."; return; }
-      location.href = "/game.html?id=" + data.id;
-    } catch (err) {
-      errEl.textContent = "Network error.";
+      const data = await api("POST", "/api/games", body);
+      if (data.status === "active") location.href = "/game.html?id=" + data.id;
+      else refresh();
+    } catch (e) {
+      err.textContent = e.message;
     }
   });
 
+  // ---- lists ----
+
+  const who = (s) => (s.kind === "human" ? s.username : s.kind === "ai" ? "AI" : "open");
+
   // A game's one-line status: who is to play, or how it ended.
   function describe(g) {
+    if (g.status === "lobby") {
+      const open = g.seats.filter((s) => s.kind === "open").length;
+      return open ? `waiting for ${open} more` : "ready to start";
+    }
     if (g.status === "finished") {
       const w = g.seats[g.winnerSeat];
       return w ? `${w.civ} won` : "finished";
     }
-    if (g.status === "aborted") return "aborted";
+    if (g.status === "aborted") return "abandoned";
     const s = g.seats[g.currentSeat];
     if (g.currentSeat === g.mySeat) return "your turn";
-    return s ? `waiting for ${s.civ}${s.kind === "human" ? " (" + s.username + ")" : ""}` : "";
+    return s ? `${s.civ}${s.kind === "human" ? " (" + s.username + ")" : " (AI)"} to play` : "";
   }
 
-  async function loadGames() {
-    let games;
-    try {
-      const res = await fetch("/api/games", { credentials: "same-origin" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      games = await res.json();
-    } catch (err) {
-      listEl.innerHTML = "";
-      listEl.appendChild(el("p", "muted empty", "Could not load your games."));
-      return;
+  // The four seats of a game as small chips, with a Join button on open ones
+  // when the viewer can take one.
+  function seatChips(g, canJoin) {
+    const wrap = el("span", "seat-chips");
+    for (const s of g.seats) {
+      const chip = el("span", "chip " + s.kind);
+      chip.append(swatch(s.seat), el("span", null, who(s)));
+      if (s.kind === "human" && s.seat === g.mySeat) chip.classList.add("me");
+      if (s.kind === "open" && canJoin) {
+        const b = el("button", "chip-btn", "Join");
+        b.addEventListener("click", () => act(`/api/games/${g.id}/seats/${s.seat}/join`));
+        chip.appendChild(b);
+      }
+      wrap.appendChild(chip);
     }
-    listEl.innerHTML = "";
-    countEl.textContent = games.length ? `(${games.length})` : "";
-    if (!games.length) {
-      listEl.appendChild(el("p", "muted empty", "No games yet. Start one above."));
-      return;
+    return wrap;
+  }
+
+  async function act(path, method = "POST") {
+    try { await api(method, path); refresh(); }
+    catch (e) { alert(e.message); }
+  }
+
+  function tableControls(g) {
+    const box = el("span", "controls");
+    if (me && g.hostId === me.id) {
+      const start = el("button", "primary", g.seats.some((s) => s.kind === "open") ? "Start anyway" : "Start");
+      start.title = "Open seats left are played by the server";
+      start.addEventListener("click", async () => {
+        try { await api("POST", `/api/games/${g.id}/start`); location.href = "/game.html?id=" + g.id; }
+        catch (e) { alert(e.message); }
+      });
+      const cancel = el("button", "danger", "Cancel");
+      cancel.addEventListener("click", () => { if (confirm("Cancel this table?")) act(`/api/games/${g.id}`, "DELETE"); });
+      box.append(start, cancel);
+    } else if (g.mySeat !== null) {
+      const leave = el("button", null, "Leave");
+      leave.addEventListener("click", () => act(`/api/games/${g.id}/seats/${g.mySeat}/leave`));
+      box.appendChild(leave);
     }
-    for (const g of games) {
-      const row = el("div", "row");
-      const main = el("div", "row-main");
-      const me = g.seats[g.mySeat];
-      const swatch = el("span", "swatch");
-      swatch.style.background = PLAYER_COLORS[g.mySeat];
-      main.append(swatch, el("span", "name", `Game #${g.id}`),
-        el("span", "muted small", `${me ? me.civ : ""} · turn ${g.turn} · ${describe(g)}`));
-      if (g.currentSeat === g.mySeat && g.status === "active") main.appendChild(el("span", "tag you", "your turn"));
-      const open = el("a", null, g.status === "active" ? "Play" : "View");
+    return box;
+  }
+
+  function gameRow(g, { canJoin = false, link = true } = {}) {
+    const row = el("div", "row");
+    const main = el("div", "row-main");
+    const head = el("div", "row-head");
+    head.append(el("span", "name", `Game #${g.id}`), el("span", "muted small", describe(g)));
+    if (g.status === "active" && g.currentSeat === g.mySeat) head.appendChild(el("span", "tag you", "your turn"));
+    if (g.status === "lobby") head.appendChild(el("span", "tag", "table"));
+    main.append(head, seatChips(g, canJoin));
+    row.appendChild(main);
+    if (g.status === "lobby") row.appendChild(tableControls(g));
+    else if (link) {
+      const open = el("a", "button-link", g.status === "active" ? (g.mySeat !== null ? "Play" : "Watch") : "View");
       open.href = "/game.html?id=" + g.id;
-      open.className = "button-link";
-      row.append(main, open);
-      listEl.appendChild(row);
+      row.appendChild(open);
+    }
+    return row;
+  }
+
+  function fill(listId, countId, games, empty, opts) {
+    const list = $(listId);
+    list.innerHTML = "";
+    $(countId).textContent = games.length ? `(${games.length})` : "";
+    if (!games.length) { list.appendChild(el("p", "muted empty", empty)); return; }
+    for (const g of games) list.appendChild(gameRow(g, typeof opts === "function" ? opts(g) : opts));
+  }
+
+  let refreshing = false;
+  async function refresh() {
+    if (refreshing) return;
+    refreshing = true;
+    try {
+      const [mine, open, live] = await Promise.all([
+        api("GET", "/api/games"), api("GET", "/api/games/open"), api("GET", "/api/games/live"),
+      ]);
+      const myTurn = mine.filter((g) => g.status === "active" && g.currentSeat === g.mySeat);
+      $("turn-panel").hidden = !myTurn.length;
+      fill("turn-list", "games-count", myTurn, "", { link: true });
+      fill("open-list", "open-count", open, "No open tables. Create one below.", (g) => ({ canJoin: g.mySeat === null }));
+      fill("games-list", "games-count", mine, "No games yet. Start one above.", { link: true });
+      fill("live-list", "live-count", live.filter((g) => g.mySeat === null), "Nothing being played right now.", { link: true });
+    } catch (e) {
+      $("games-list").innerHTML = "";
+      $("games-list").appendChild(el("p", "muted empty", "Could not load the lists."));
+    } finally {
+      refreshing = false;
     }
   }
-  loadGames();
+
+  function renderPresence(users) {
+    const list = $("online-list");
+    list.innerHTML = "";
+    $("online-count").textContent = users.length ? `(${users.length})` : "";
+    for (const u of users) {
+      const row = el("div", "row small");
+      row.appendChild(el("span", "name", u.username));
+      list.appendChild(row);
+    }
+  }
+
+  // ---- turn alerts ----
+
+  const notifyBtn = $("notify-btn");
+  function renderNotifyButton() {
+    if (!("Notification" in window)) { notifyBtn.hidden = true; $("notify-text").textContent = "This browser has no notifications."; return; }
+    const p = Notification.permission;
+    notifyBtn.hidden = p !== "default";
+    if (p === "granted") $("notify-text").textContent = "Notifications are on for this browser.";
+    if (p === "denied") $("notify-text").textContent = "Notifications are blocked in this browser's settings.";
+  }
+  notifyBtn.addEventListener("click", async () => {
+    await Notification.requestPermission();
+    renderNotifyButton();
+  });
+  renderNotifyButton();
+
+  function yourTurn(info) {
+    refresh();
+    if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+      const n = new Notification("LorCiv — your turn", { body: `Game #${info.gameId} is waiting for you.` });
+      n.onclick = () => { window.focus(); location.href = "/game.html?id=" + info.gameId; };
+    }
+  }
+
+  // ---- socket ----
+
+  const conn = document.getElementById("connStatus");
+  const socket = connectSocket({
+    onConnect: () => { socket.emit("lobby:enter"); refresh(); if (conn) { conn.textContent = "●"; conn.className = "conn-dot ok"; } },
+    onDisconnect: () => { if (conn) { conn.textContent = "●"; conn.className = "conn-dot bad"; } },
+    onError: (err) => { if (String(err && err.message).includes("unauthorized")) location.replace("/login.html"); },
+  });
+  socket.on("lobby:changed", refresh);
+  socket.on("lobby:presence", renderPresence);
+  socket.on("turn:yours", yourTurn);
+
+  window.addEventListener("user:known", (e) => { me = e.detail; refresh(); });
 })();

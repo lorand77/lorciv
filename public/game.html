@@ -112,10 +112,26 @@
         <div id="msg-text"></div>
     </div>
 
+    <div class="panel" id="players-panel">
+        <div class="section-label">Players</div>
+        <div id="players-list"></div>
+    </div>
+
+    <div class="panel" id="chat-panel">
+        <div class="section-label">Chat</div>
+        <div id="chat-log"></div>
+        <form id="chat-form" autocomplete="off">
+            <input id="chat-input" type="text" maxlength="300" placeholder="Say something…">
+        </form>
+    </div>
+
     <div style="flex:1"></div>
 
     <div class="panel">
-        <button id="stats-btn" style="margin-bottom:6px;width:100%">Stats</button>
+        <div class="btn-row">
+            <button id="stats-btn">Stats</button>
+            <button id="leave-btn" class="danger hidden" title="Hand your seat to the AI for the rest of the game">Leave</button>
+        </div>
         <button id="end-turn-btn" disabled>Waiting…</button>
     </div>
 

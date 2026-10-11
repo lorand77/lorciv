@@ -62,6 +62,8 @@ let seq      = -1;     // the snapshot's sequence number; sent back with every a
 let mySeat   = null;   // our seat, or null when watching
 let seats    = [];     // [{ seat, kind, username, difficulty, civ }]
 let status   = null;   // 'active' | 'finished' | 'aborted'
+let deadline = null;   // ms since the epoch when the current human turn expires, or null
+let formerSeat = null; // our seat before the AI took it over, or null
 let renderer = null;
 let pending  = false;  // an action is awaiting the server's answer
 let _victoryShown = false;
@@ -97,6 +99,8 @@ const socket = connectSocket({
     },
 });
 socket.on('game:state', applyState);
+socket.on('chat:message', (m) => { if (m.gameId === GAME_ID) appendChat(m); });
+socket.on('turn:yours', (info) => { if (info.gameId === GAME_ID) announceTurn(); });
 
 function setConn(text) {
     const el = document.getElementById('conn-status');
@@ -109,10 +113,12 @@ function setConn(text) {
 function join() {
     socket.emit('game:join', { gameId: GAME_ID }, (res) => {
         if (!res || !res.ok) {
-            setConn(res && res.error === 'no_such_game' ? 'No such game.' : 'Could not join the game.');
+            const why = { no_such_game: 'No such game.', not_started: 'This game has not started yet. Back to the lobby to see its table.' };
+            setConn((res && why[res.error]) || 'Could not join the game.');
             return;
         }
         setConn('');
+        renderChat(res.state.chat || []);
         applyState(res.state);
     });
 }
@@ -155,7 +161,9 @@ function applyState(state) {
     seq    = state.seq;
     status = state.status;
     seats  = state.seats;
+    deadline = state.deadline ?? null;
     if (state.mySeat !== undefined) mySeat = state.mySeat;
+    if (state.formerSeat !== undefined) formerSeat = state.formerSeat;
 
     if (!renderer) {
         renderer = new HexRenderer(canvas, PLAYER_COLORS);
@@ -173,6 +181,7 @@ function applyState(state) {
     else if (first) clearMessages();
 
     updateSidebar();
+    renderPlayers();
     renderer.draw();
 
     if (game.winner !== null) { closeTechTree(); showVictoryScreen(game.winner); return; }
@@ -534,11 +543,133 @@ function updateScoreboard() {
 
 function statusText() {
     if (game.winner !== null) return `${game.civs[game.winner].name} won the game.`;
+    if (status === 'aborted') return 'This game was abandoned: nobody is left to play it.';
     if (status !== 'active') return 'This game is over.';
     if (isMyTurn()) return 'Your turn';
+    if (mySeat === null && formerSeat !== null) return `Your seat was handed to the AI · ${seatName(game.currentPlayer)} to play`;
     if (mySeat === null) return `Watching · ${seatName(game.currentPlayer)} to play`;
     return `Waiting for ${seatName(game.currentPlayer)}…`;
 }
+
+// "2:31" for minutes, "1h 05m" for hours, "2d 3h" for days.
+function formatRemaining(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 3600) return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`;
+    return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
+}
+
+// The status line, with the time left on the clock when there is one. Called
+// every second while a deadline is set.
+function renderStatusLine() {
+    if (!game) return;
+    const line = document.getElementById('status-line');
+    line.textContent = statusText();
+    line.classList.toggle('mine', isMyTurn());
+    if (deadline !== null && status === 'active' && game.winner === null) {
+        const left = deadline - Date.now();
+        const span = document.createElement('span');
+        span.className = 'countdown' + (left < 30000 ? ' low' : '');
+        span.textContent = '⏱ ' + formatRemaining(left);
+        line.appendChild(span);
+    }
+}
+setInterval(() => { if (deadline !== null) renderStatusLine(); }, 1000);
+
+// The seats: who sits where, whose turn it is, missed turns.
+function renderPlayers() {
+    const list = document.getElementById('players-list');
+    list.innerHTML = '';
+    for (const s of seats) {
+        const civ = game.civs[s.seat];
+        const row = document.createElement('div');
+        row.className = 'player-row'
+            + (s.seat === game.currentPlayer && game.winner === null ? ' current' : '')
+            + (civ.isEliminated ? ' eliminated' : '');
+        const dot = document.createElement('span');
+        dot.className = 'civ-dot';
+        dot.style.background = PLAYER_COLORS[s.seat];
+        const who = document.createElement('span');
+        who.className = 'who';
+        const name = s.kind === 'human' ? s.username : 'AI';
+        who.textContent = `${civ.name} · ${name}${s.seat === mySeat ? ' (you)' : ''}`;
+        row.append(dot, who);
+        if (s.missedTurns > 0 && s.kind === 'human') {
+            const m = document.createElement('span');
+            m.className = 'missed';
+            m.textContent = `⏳×${s.missedTurns}`;
+            m.title = `${s.missedTurns} turn(s) ran out`;
+            row.appendChild(m);
+        }
+        if (s.seat === game.currentPlayer && game.winner === null) {
+            const mark = document.createElement('span');
+            mark.className = 'mark';
+            mark.textContent = '▶';
+            row.appendChild(mark);
+        }
+        list.appendChild(row);
+    }
+    document.getElementById('leave-btn').classList.toggle('hidden', !(mySeat !== null && status === 'active'));
+}
+
+// ---- Chat ----
+
+function chatLine(m) {
+    const line = document.createElement('div');
+    line.className = 'chat-line' + (window.currentUser && m.userId === window.currentUser.id ? ' mine' : '');
+    const who = document.createElement('span');
+    who.className = 'chat-who';
+    who.textContent = m.username;
+    const text = document.createElement('span');
+    text.className = 'chat-text';
+    text.textContent = m.text;
+    line.append(who, text);
+    return line;
+}
+
+function renderChat(messages) {
+    const log = document.getElementById('chat-log');
+    log.innerHTML = '';
+    for (const m of messages) log.appendChild(chatLine(m));
+    log.scrollTop = log.scrollHeight;
+}
+
+function appendChat(m) {
+    const log = document.getElementById('chat-log');
+    log.appendChild(chatLine(m));
+    log.scrollTop = log.scrollHeight;
+}
+
+document.getElementById('chat-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+    socket.emit('chat:send', { gameId: GAME_ID, text }, (res) => {
+        if (res && res.ok) input.value = '';
+        else showMessage('Could not send that.');
+    });
+});
+
+// ---- Your turn, while the tab is in the background ----
+
+const BASE_TITLE = document.title;
+function announceTurn() {
+    if (!document.hidden) return;
+    document.title = '● Your turn — LorCiv';
+    if ('Notification' in window && Notification.permission === 'granted') {
+        const n = new Notification('LorCiv — your turn', { body: `Game #${GAME_ID} is waiting for you.` });
+        n.onclick = () => window.focus();
+    }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) document.title = BASE_TITLE; });
+
+document.getElementById('leave-btn').addEventListener('click', () => {
+    if (!confirm('Hand your seat to the AI for the rest of the game? This cannot be undone.')) return;
+    socket.emit('game:leave', { gameId: GAME_ID }, (res) => {
+        if (!res || !res.ok) showMessage(ERROR_TEXT[res && res.error] || 'Could not leave.');
+    });
+});
 
 function updateEndTurnButton() {
     const btn = document.getElementById('end-turn-btn');
@@ -555,9 +686,7 @@ function updateSidebar() {
 
     const dot = `<span class="civ-dot" style="background:${PLAYER_COLORS[civ.playerIndex]}"></span>`;
     document.getElementById('turn-label').innerHTML = `Turn ${game.turn} — ${dot}${civ.name}`;
-    const line = document.getElementById('status-line');
-    line.textContent = statusText();
-    line.classList.toggle('mine', isMyTurn());
+    renderStatusLine();
 
     document.getElementById('stat-gold').textContent    = civ.gold;
     document.getElementById('stat-sci').textContent     = civ.science;

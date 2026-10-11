@@ -13,6 +13,7 @@ const sessionMiddleware = require("./auth/session");
 const authRoutes = require("./auth/routes");
 const gameRoutes = require("./game/routes");
 const { attachSockets } = require("./game/socket");
+const rooms = require("./game/rooms");
 
 // At or over this, a request is logged as a warning.
 const SLOW_MS = 1000;
@@ -91,6 +92,9 @@ function createServer() {
   const server = http.createServer(app);
   const io = attachSockets(server);
   app.set("io", io); // Auth routes revoke sockets when their session ends.
+  // Every active game comes back into memory now, so turn timers run whether
+  // or not anyone opens the game, and the sweeps start.
+  rooms.resumeAll();
   return { app, server, io };
 }
 

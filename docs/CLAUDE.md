@@ -30,9 +30,11 @@ under `src/game/` or `src/shared/`.
   `settings`, `actions`. Player actions go through `actions.js` and nowhere else.
 - `public/*.html` pages with their scripts in `public/js/`; `shell.js` builds
   the top bar and rail, `authGuard.js` bounces signed-out visitors to login.
-  `game.html` is the game: `ui.js` (renders snapshots, sends actions),
-  `renderer.js` (the canvas map), `game.css`. `lobby.html`/`lobby.js` start
-  and list games. `public/assets/` holds the terrain and resource images.
+  `game.html` is the game: `ui.js` (renders snapshots, sends actions, chat),
+  `renderer.js` (the canvas map), `game.css`. `lobby.html`/`lobby.js` is the
+  lobby: tables, seats, your games, live games, presence. `public/assets/`
+  holds the terrain and resource images.
+- `src/db/retention.js` — the chat sweep, started by `server.js` only.
 - `tools/simulate.js` — N AI-only games with win counts; run by hand, never
   loaded by the app.
 - `test/unit`, `test/integration` — `node --test`. `test/helpers/server.js`

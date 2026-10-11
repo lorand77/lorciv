@@ -11,7 +11,7 @@
 
 (function () {
   const ITEMS = [
-    { href: "/lobby.html", icon: "⬡", label: "Lobby" },
+    { href: "/lobby.html", icon: "⬡", label: "Play" },
     { href: "/leaderboard.html", icon: "🏆", label: "Leaderboard" },
   ];
 

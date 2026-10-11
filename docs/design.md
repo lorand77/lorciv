@@ -607,10 +607,13 @@ ack would be dropped and leave the page locked.
 
 ### The lobby page
 
-`public/lobby.html` with `public/js/lobby.js`: a new-game form (seat 0 is
-yours; seats 1–3 are AI with a difficulty each; seed; turn time) built from the
-engine's own catalogues, so it offers exactly what the server accepts; and the
-list of your games with turn, whose turn it is and a link to play or view.
+`public/lobby.html` with `public/js/lobby.js`, called "Play" wherever a
+player sees it (the rail, the page title, the "← Play" link on the game and
+replay pages); the code and the URL keep the name lobby. It has a new-game
+form (seat 0 is yours; seats 1–3 are AI with a difficulty each; seed; turn
+time) built from the engine's own catalogues, so it offers exactly what the
+server accepts, and the list of your games with turn, whose turn it is and a
+link to play or view.
 Open seats, presence and watching other people's games come with M3.
 
 ## Playing together: tables, timers, chat
@@ -686,7 +689,7 @@ returns the last 50 as `chat`. The text is never logged.
 A Players panel lists the seats with the civ, the player or "AI", a marker on
 the seat to move and the missed-turn count of an absent player; the status
 line carries the time left on the clock, red under thirty seconds; a Leave
-button hands the seat to the AI after a confirmation, while the "← Lobby"
+button hands the seat to the AI after a confirmation, while the "← Play"
 link in the top bar (on the replay page too) only goes to the lobby, the
 seat kept and the clock running;
 a Chat panel shows the

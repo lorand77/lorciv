@@ -114,7 +114,7 @@ function setConn(text) {
 function join() {
     socket.emit('game:join', { gameId: GAME_ID }, (res) => {
         if (!res || !res.ok) {
-            const why = { no_such_game: 'No such game.', not_started: 'This game has not started yet. Back to the lobby to see its table.' };
+            const why = { no_such_game: 'No such game.', not_started: 'This game has not started yet. Its table is on the Play page.' };
             setConn((res && why[res.error]) || 'Could not join the game.');
             return;
         }

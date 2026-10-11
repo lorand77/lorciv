@@ -636,7 +636,7 @@ once an hour (`game.abandon_sweep`).
 
 The lobby page shows: a "Your turn" panel when a game waits for you; open
 tables with Join on their open seats, and Start or Cancel for the host, Leave
-for other players; the new-table form; your games; live games to watch; who is
+for other players; the new-table form; live games to watch; your games; who is
 online. It sits in the `lobby` socket room: `lobby:changed` makes it refetch
 the lists (sent when a table changes or a game's status or turn changes, not
 on every move), `lobby:presence` is who is on the page, `turn:yours` refetches

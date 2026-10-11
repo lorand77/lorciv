@@ -674,14 +674,14 @@ ack would be dropped and leave the page locked.
 - **Keys:** the original's shortcuts (Enter ends the turn, F founds, M/A/P
   start an improvement, K/H/U, S and T for the overlays, arrows pan), ignored
   while typing, with Ctrl, Cmd or Alt held, and for Enter on a focused button
-  or link, which presses that instead; C centres the map. A held Enter ends
+  or link, which presses that instead; C centers the map. A held Enter ends
   one turn, not one per repeat, and End Turn is held for a second when a turn
   of ours begins: with only AI seats in between, the next turn is ours again
   before a double-click's second click lands. A button clicked with the mouse
   gives up its focus (Leave always does, after its confirmation), so a later
   Enter never presses it by accident.
-- **The map** opens centred on our capital (else another city or unit of
-  ours; a spectator's on the civ to move), and the Centre button or C brings
+- **The map** opens centered on our capital (else another city or unit of
+  ours; a spectator's on the civ to move), and the Center button or C brings
   it back. Pan and zoom always keep part of the map on screen.
 - **Connection:** the socket reconnects on its own; every `connect` re-sends
   `game:join`, so a reload or a server restart lands on the current state. A
@@ -778,7 +778,8 @@ returns the last 50 as `chat`. The text is never logged.
 A Players panel lists the seats with the civ, the player or "AI", a marker on
 the seat to move and the missed-turn count of an absent player; the status
 line carries the time left on the clock, red under thirty seconds; a Leave
-button hands the seat to the AI after a confirmation, while the "← Play"
+button hands the seat to the AI after a confirmation and then goes to the
+Play page, while the "← Play"
 link in the top bar (on the replay page too) only goes to the lobby, the
 seat kept and the clock running;
 a Chat panel shows the

@@ -720,7 +720,9 @@ document.getElementById('leave-btn').addEventListener('click', (e) => {
     e.currentTarget.blur();
     if (!sure) return;
     socket.emit('game:leave', { gameId: GAME_ID }, (res) => {
-        if (!res || !res.ok) showMessage(ERROR_TEXT[res && res.error] || 'Could not leave.');
+        if (!res || !res.ok) { showMessage(ERROR_TEXT[res && res.error] || 'Could not leave.'); return; }
+        // The seat is the AI's now; nothing left to do here.
+        location.href = '/lobby.html';
     });
 });
 

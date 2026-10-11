@@ -311,6 +311,12 @@ npm ci --omit=dev  # exactly the committed package-lock.json, nothing re-resolve
 pm2 restart lorciv
 ```
 
+As one line, run as `lorciv` from anywhere; a failed pull or install stops it
+before the restart:
+```
+cd ~/lorciv && git pull && npm ci --omit=dev && pm2 restart lorciv
+```
+
 `npm ci` deletes `node_modules` and reinstalls, so restart straight after.
 Here ignore-scripts is not set, so the native modules build during `npm ci`. If
 it ever is set on the server, add the `\npm rebuild ...` line from the dev

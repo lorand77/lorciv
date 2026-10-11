@@ -567,7 +567,11 @@ reachable and attackable tiles, yields, costs, which techs are available, what
 a city may build (`canProduce`). Every click or key that means something
 becomes one `game:action`; the ack shows the engine's message; the following
 `game:state` broadcast replaces the local game and redraws. One action is in
-flight at a time (`pending`), and the end-turn button says so.
+flight at a time (`pending`), and the end-turn button says so. The server
+broadcasts before it answers, so the ack redraws the sidebar's buttons once
+`pending` is clear. The action is sent with an ack timeout (30 s), whose
+callback also fires, with an error, when the connection drops first; a plain
+ack would be dropped and leave the page locked.
 
 - **Selection is by id**, re-resolved after every snapshot: our unit with
   moves left stays selected, so a move keeps the unit under the cursor; a unit
@@ -583,9 +587,16 @@ flight at a time (`pending`), and the end-turn button says so.
   nothing is being researched, as the original did.
 - **Victory** shows the original overlay with the score graph from the
   snapshot's `scoreHistory`, and a button back to the lobby.
+- **Keys:** the original's shortcuts (Enter ends the turn, F founds, M/A/P
+  start an improvement, K/H/U, S and T for the overlays, arrows pan), ignored
+  while typing, with Ctrl, Cmd or Alt held, and for Enter on a focused button
+  or link, which presses that instead.
 - **Connection:** the socket reconnects on its own; every `connect` re-sends
   `game:join`, so a reload or a server restart lands on the current state. A
-  refused handshake (`unauthorized`) sends the page to login.
+  refused handshake (`unauthorized`) sends the page to login. A disconnect the
+  server initiated (logout in another tab, an expired session, deactivation)
+  is one Socket.IO does not recover from by itself: `net.js` asks `/api/me`,
+  goes to login on a 401 and reconnects otherwise, for the lobby as well.
 - **Gone from the original:** the setup screen, quicksave, export and import
   (the server holds every game), and the local AI loop.
 

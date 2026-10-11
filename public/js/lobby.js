@@ -197,10 +197,25 @@
     for (const g of games) list.appendChild(gameRow(g, typeof opts === "function" ? opts(g) : opts));
   }
 
+  // One refresh at a time. A call while one is in flight (a lobby:changed, the
+  // user becoming known) may carry news the running fetch missed, so it is
+  // remembered and the lists are fetched once more when that one is done.
   let refreshing = false;
+  let again = false;
   async function refresh() {
-    if (refreshing) return;
+    if (refreshing) { again = true; return; }
     refreshing = true;
+    try {
+      do {
+        again = false;
+        await load();
+      } while (again);
+    } finally {
+      refreshing = false;
+    }
+  }
+
+  async function load() {
     try {
       const [mine, open, live] = await Promise.all([
         api("GET", "/api/games"), api("GET", "/api/games/open"), api("GET", "/api/games/live"),
@@ -214,8 +229,6 @@
     } catch (e) {
       $("games-list").innerHTML = "";
       $("games-list").appendChild(el("p", "muted empty", "Could not load the lists."));
-    } finally {
-      refreshing = false;
     }
   }
 

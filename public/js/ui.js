@@ -131,15 +131,25 @@ const ERROR_TEXT = {
     server_error:  'The server could not save that. Try again.',
 };
 
-// Send one action. The server answers at once (the ack); the new state
-// follows as a game:state broadcast, which is what redraws the page.
+// How long an action may wait for its answer. The AI seats that follow an
+// end of turn play before the server answers, which can take seconds.
+const ACK_TIMEOUT_MS = 30000;
+
+// Send one action. The server broadcasts the new state as game:state, which is
+// what redraws the page, and then answers (the ack). The state arrives while
+// `pending` is still set, so the ack redraws the sidebar's buttons once more.
+// With a timeout the ack also fires, with an error, if the connection drops
+// first; a plain one would be dropped and leave `pending` set for good. The
+// reconnect's game:join then brings the state, whether the action went
+// through or not.
 function send(action) {
     if (!isMyTurn() || pending) return;
     pending = true;
     updateEndTurnButton();
-    socket.emit('game:action', { gameId: GAME_ID, seq, ...action }, (res) => {
+    socket.timeout(ACK_TIMEOUT_MS).emit('game:action', { gameId: GAME_ID, seq, ...action }, (err, res) => {
         pending = false;
-        updateEndTurnButton();
+        updateSidebar();
+        if (err) { showMessage('Lost touch with the server; that action may not have gone through.'); return; }
         if (!res) return;
         if (!res.ok) {
             // A stale seq is answered with a fresh state; nothing to show.
@@ -1065,10 +1075,14 @@ window.addEventListener('resize', () => {
 
 document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    // Ctrl+F, Cmd+P and the like belong to the browser, not to the game.
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (!game) return;
 
     const unit = selectedUnit();
     const key = e.key;
+    // Enter on a focused button or link presses that, not End Turn.
+    if (key === 'Enter' && e.target.closest('button, a')) return;
 
     switch (key) {
         case 'Enter':

@@ -270,6 +270,43 @@ const persist = db.transaction((room, action, seat, userId, seatChange) => {
   return snapshotJson;
 });
 
+// A seat still played by a person whose civ is still in the game. Once none
+// is left the game is abandoned, not played out by the AI.
+function humanLeft(room) {
+  return room.seats.some((s) => s.kind === "human" && !room.game.civs[s.seat].isEliminated);
+}
+
+// The room as of its last write, to roll back to.
+function savedState(room) {
+  return { seq: room.seq, status: room.status, deadline: room.deadline, snapshot: room.lastSnapshot };
+}
+
+// Put the room back as it was at its last write: the engine from the last
+// snapshot, the seats from the database.
+function restore(room, saved) {
+  room.game = deserializeGame(JSON.parse(saved.snapshot));
+  room.seq = saved.seq;
+  room.status = saved.status;
+  room.deadline = saved.deadline;
+  room.lastSnapshot = saved.snapshot;
+  room.seats = seatsFromRows(queries.getSeats.all(room.gameId));
+}
+
+// Run one change to a room. Whatever throws in it before the write (the
+// validator, the engine, the AI) puts the room back as it was at its last
+// write before the error goes on, so memory never holds a state that the
+// database and the action log do not, and a retry starts from the same place.
+// `seq` moves only with a successful write; after one there is nothing to undo.
+function guarded(room, fn) {
+  const saved = savedState(room);
+  try {
+    return fn();
+  } catch (err) {
+    if (room.seq === saved.seq) restore(room, saved);
+    throw err;
+  }
+}
+
 // After the engine has changed: let the AI seats play up to the next human,
 // settle victory or abandonment, compute the next deadline, write everything,
 // and tell the world. `seatChange` names a seat whose kind or missed-turn
@@ -277,30 +314,23 @@ const persist = db.transaction((room, action, seat, userId, seatChange) => {
 // write failed and the room was rolled back.
 function commit(room, action, seat, userId, seatChange = null) {
   const game = room.game;
-  const before = {
-    seq: room.seq, status: room.status, deadline: room.deadline, snapshot: room.lastSnapshot,
-    player: JSON.parse(room.lastSnapshot).game.currentPlayer, turn: JSON.parse(room.lastSnapshot).game.turn,
-  };
-  // With nobody human left the game is abandoned, not played out by the AI.
-  const nobodyLeft = !room.seats.some((s) => s.kind === "human");
-  if (!nobodyLeft) {
+  const last = JSON.parse(room.lastSnapshot).game;
+  const before = { ...savedState(room), player: last.currentPlayer, turn: last.turn };
+  // runCpuTurns stops by itself if the AI eliminates the last human civ.
+  if (humanLeft(room)) {
     runCpuTurns(game);
     game.checkVictory();
   }
 
   if (game.winner !== null) room.status = "finished";
-  else if (nobodyLeft) room.status = "aborted";
+  else if (!humanLeft(room)) room.status = "aborted";
   room.deadline = computeDeadline(room);
   room.seq++;
   try {
     room.lastSnapshot = persist(room, action, seat, userId, seatChange);
   } catch (err) {
     log.error("game.persist_failed", { game: room.gameId, seq: room.seq, err });
-    room.game = deserializeGame(JSON.parse(before.snapshot));
-    room.seq = before.seq;
-    room.status = before.status;
-    room.deadline = before.deadline;
-    room.seats = seatsFromRows(queries.getSeats.all(room.gameId));
+    restore(room, before);
     return { ok: false, error: "server_error", message: "Could not save the game." };
   }
   if (room.status === "finished") {
@@ -321,6 +351,10 @@ function commit(room, action, seat, userId, seatChange = null) {
 // Returns the validator's result shape.
 function applyPlayerAction(room, seat, userId, action) {
   if (room.status !== "active") return { ok: false, error: "game_over", message: "" };
+  return guarded(room, () => playerAction(room, seat, userId, action));
+}
+
+function playerAction(room, seat, userId, action) {
   const game = room.game;
   const civ = game.civs[seat];
   // The messages from this seat's last end of turn went out with the previous
@@ -343,11 +377,13 @@ function leaveGame(room, userId) {
   if (room.status !== "active") return { ok: false, error: "game_over" };
   const seat = seatOf(room, userId);
   if (seat === null) return { ok: false, error: "not_seated" };
-  const s = room.seats[seat];
-  s.kind = "ai";
-  room.game.civs[seat].isCpu = true;
-  log.info("game.takeover", { game: room.gameId, seat, user: userId, reason: "leave" });
-  return commit(room, { type: "leave" }, seat, userId, { seat }) ?? { ok: true };
+  return guarded(room, () => {
+    const s = room.seats[seat];
+    s.kind = "ai";
+    room.game.civs[seat].isCpu = true;
+    log.info("game.takeover", { game: room.gameId, seat, user: userId, reason: "leave" });
+    return commit(room, { type: "leave" }, seat, userId, { seat }) ?? { ok: true };
+  });
 }
 
 // The current human seat's time is up: the server ends the turn for them and
@@ -359,7 +395,12 @@ function expireTurn(room, now = Date.now()) {
   const seat = game.currentPlayer;
   const s = room.seats[seat];
   if (s.kind !== "human") { room.deadline = computeDeadline(room); return false; }
+  return guarded(room, () => timeOut(room, seat));
+}
 
+function timeOut(room, seat) {
+  const game = room.game;
+  const s = room.seats[seat];
   const res = applyAction(game, seat, { type: "endTurn" });
   if (!res.ok) return false;
   s.missedTurns++;
@@ -401,12 +442,18 @@ function sweepAbandoned() {
 }
 
 // At boot: rebuild every active game so its turn timer runs, and start the
-// sweeps. Nothing is thrown away.
+// sweeps. Nothing is thrown away. A game that cannot be rebuilt (a snapshot
+// from an engine version with no migration, a hand-edited row) is logged and
+// left in the database; it must not keep every other game from booting.
 function resumeAll() {
   sweepAbandoned();
   let n = 0;
   for (const { id } of queries.listActiveGameIds.all()) {
-    if (getRoom(id)) n++;
+    try {
+      if (getRoom(id)) n++;
+    } catch (err) {
+      log.error("game.resume_failed", { game: id, err });
+    }
   }
   log.info("process.resumed", { games: n });
   if (!sweepTimer) sweepTimer = setInterval(() => sweepDeadlines(), config.DEADLINE_SWEEP_MS).unref();

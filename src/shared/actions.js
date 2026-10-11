@@ -22,6 +22,12 @@ function done(message = "") { return { ok: true, message }; }
 
 function isCoord(v) { return Number.isInteger(v); }
 
+// A key a client sent names an entry of the catalogue only if it is a string
+// the catalogue itself holds: `defs[key]` alone would accept "constructor" and
+// friends from Object.prototype, and arrays that stringify to a real key.
+function isKeyOf(defs, key) { return typeof key === "string" && Object.hasOwn(defs, key); }
+function isItem(key) { return isKeyOf(UNIT_DEFS, key) || isKeyOf(BUILDING_DEFS, key); }
+
 // The unit `id` if it exists and belongs to `seat`, else a failure result.
 function ownUnit(game, seat, id) {
     const unit = Number.isInteger(id) ? game.unitById(id) : null;
@@ -81,7 +87,7 @@ function applyAction(game, seat, action) {
             if (err) return err;
             if (unit.unitType !== "worker") return fail("illegal", "Only a worker can build.");
             if (unit.movesLeft === 0) return fail("illegal", "No moves left.");
-            if (!IMPROVEMENT_DEFS[action.key]) return fail("illegal", "Unknown improvement.");
+            if (!isKeyOf(IMPROVEMENT_DEFS, action.key)) return fail("illegal", "Unknown improvement.");
             if (!game.startImprovement(unit, action.key)) return fail("illegal", "Cannot build that here.");
             return done();
         }
@@ -97,11 +103,13 @@ function applyAction(game, seat, action) {
         case "setProduction": {
             const [city, err] = ownCity(game, seat, action.cityId);
             if (err) return err;
+            if (!isItem(action.key)) return fail("illegal", "Unknown item.");
             return fromPair(game.setProduction(city, action.key));
         }
         case "buy": {
             const [city, err] = ownCity(game, seat, action.cityId);
             if (err) return err;
+            if (!isItem(action.key)) return fail("illegal", "Unknown item.");
             // buyItem checks tech, resource and gold; canProduce adds "not the
             // palace" and "not already built", which the old list enforced by
             // never offering them.
@@ -110,6 +118,7 @@ function applyAction(game, seat, action) {
             return fromPair(game.buyItem(city, action.key));
         }
         case "setResearch":
+            if (!isKeyOf(TECH_DEFS, action.key)) return fail("illegal", "Unknown technology.");
             return fromPair(game.setResearch(civ, action.key));
         case "endTurn":
             // Running the AI seats that follow is the server's job (rooms.js).

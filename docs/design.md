@@ -212,7 +212,8 @@ Events:
   (`game`, `winner`, `turn`, `seq`), `game.abort` (`game`, `reason=no_humans`),
   `game.abandon_sweep` (`aborted`, `days`), `game.persist_failed` (`error`: the
   write after an action failed and the room was rolled back),
-  `game.sweep_failed` (`error`), `game.join` (`game`, `seat` or
+  `game.sweep_failed` (`error`), `game.resume_failed` (`error`, `game`, `err`:
+  a game that could not be rebuilt at boot and was skipped), `game.join` (`game`, `seat` or
   `watcher=true`), and `game.action` once per accepted player action (`game`,
   `seq`, `turn`, `seat`, `type`: the kind of action, never its payload, which
   `game_actions` holds). `game.action_refused` (`type`, `error`) at `debug`.
@@ -406,8 +407,11 @@ per civ; the victory graph draws it); `aiState`, the per-civ strategy memory
 that used to be a module-level object in `ai.js` and would have been shared by
 every game on the server; and the PRNG's state, because bankruptcy draws from
 it mid-game. `ai.js` has `runCpuTurns(game, maxTurn)`: while there is no
-winner and the current civ is a CPU, take its turn and end it. The simulator,
-the tests and later `rooms.js` all use it.
+winner and the current civ is a CPU, take its turn and end it. It also stops
+the moment the last human civ is eliminated: the turn order skips eliminated
+civs, so otherwise the AI would play the rest of the game in that one call,
+seconds of a blocked server (an AI-only game, which has no human to lose,
+plays on). The simulator, the tests and `rooms.js` all use it.
 
 **Determinism.** The map comes from the seed, combat has no randomness, the
 AI has none, and the only mid-game draw is bankruptcy from the seeded PRNG.
@@ -422,7 +426,10 @@ game resumed from any snapshot continues exactly as the unresumed one would.
 the engine, on the server (M2) and, for previews, in the browser. Checks, in
 order: the game has no winner; `action.type` is in `settings.ACTION_TYPES`;
 `seat` is the current player and not eliminated; the unit or city named by id
-exists and belongs to the seat; the move is legal by the engine
+exists and belongs to the seat; a `key` is a string the catalogue holds as
+its own property (`Object.hasOwn`), because `UNIT_DEFS[key]` alone accepts
+`"constructor"` and the rest of `Object.prototype`, and an array that
+stringifies to a real key; the move is legal by the engine
 (`getReachableTiles` for `move`, which also gives the cost;
 `getAttackableTiles` for `attack`; `canFoundCity`; `canProduce`; the Game
 method's own check for the rest); then apply. `error` is a short code for the
@@ -484,8 +491,10 @@ deserialize is the identity at several points of a game, and the snapshot
 carries ids, random state, score history, AI memory and `isCpu`; a batch of
 AI-only games finishes with unique ids and one score entry per round;
 `applyAction` refuses the wrong seat, a finished game, an unknown type, a
-unit that is not the seat's, an unreachable tile and an unknown item, and
-applies each valid action; the settings agree with the engine's catalogues.
+unit that is not the seat's, an unreachable tile, an unknown item and a key
+that is not the catalogue's own, and applies each valid action; the AI stops
+when the last human civ falls; the settings agree with the engine's
+catalogues.
 `test/integration/static.shared.test.js`: `/js/game.js` is served and
 `/js/shell.js` still falls through. The engine tests take about 20 s, most of
 it AI play.
@@ -525,7 +534,12 @@ turn or seat.
   the row's summary columns, the action row and any seat change are written in
   one transaction (`commit` in `rooms.js`; the same path serves the server's
   own `timeout` and `leave` actions). If the write fails the room is rebuilt
-  from the last written snapshot and the player gets `server_error`. On
+  from the last written snapshot and the player gets `server_error`. If
+  anything throws before the write (the validator, the engine, the AI), the
+  room is rebuilt the same way before the error goes on to the socket's
+  wrapper (`socket.handler_failed`) or the sweep (`game.sweep_failed`), so
+  memory never holds a half-applied action the database and the action log
+  do not (`guarded` in `rooms.js`). On
   success every socket in the room gets `game:state` with its own view, and
   the ack carries the engine's message (a combat result, a founded city).
   Only the fields an action can carry are stored: `type`, `unitId`, `cityId`,
@@ -539,7 +553,10 @@ turn or seat.
 - **Restarts.** `rooms.resumeAll()` runs when the app is built: every active
   game is rebuilt from its snapshot and seats (`game.resume`), its deadline
   read back, and the sweeps start. A game is never lost to a restart, and a
-  turn that ran out while the server was down ends on the first sweep.
+  turn that ran out while the server was down ends on the first sweep. A game
+  that cannot be rebuilt (a snapshot version with no migration, a hand-edited
+  row) is logged (`game.resume_failed`) and left in the database as it is; it
+  does not keep the other games, or the server, from starting.
 
 ### The game page
 
@@ -624,9 +641,12 @@ Disconnecting by itself does nothing: with games that may last days, the clock
 is the only judge of absence. `game:leave` hands a seat over at once, for good.
 A seat the AI took over keeps its `user_id`: the game stays in that person's
 list, and their view carries `formerSeat` so the page can say what happened.
-With no human seat left the game is **aborted** (`game.abort`,
+With no human left in the game, because every human seat was handed to the
+AI or every human civ was eliminated, the game is **aborted** (`game.abort`,
 `reason=no_humans`) rather than played out by the AI, and it is aborted before
-the AI would have played, which matters: a whole AI game takes seconds.
+the AI would have played, which matters: a whole AI game takes seconds. A
+human civ eliminated by the AI mid-round stops `runCpuTurns` right there. A
+game lost that way is therefore not on the leaderboard, like one left.
 
 ### Several humans in one game
 
@@ -674,8 +694,9 @@ AI seats before the first human play; then for each action, a player's action
 clears the seat's pending messages and goes through `applyAction`, a `timeout`
 is an `endTurn` plus a missed turn with the takeover at the limit, a `leave`
 flips the seat to AI; after each, the AI seats up to the next human play and
-victory is checked, unless no human seat is left, in which case the server
-abandoned the game and the replay stops there too. `replayAll(record)` returns
+victory is checked, unless no human is left (no human seat, or none whose
+civ is still in the game), in which case the server abandoned the game and
+the replay stops there too. `replayAll(record)` returns
 every state as a snapshot and a one-line label per step, or the first action
 the rules refuse, which would mean the record is corrupt.
 `test/integration/replay.test.js` plays a two-human game with a timeout, a

@@ -715,13 +715,22 @@ function aiTakeTurn(game, civ) {
     _actGold(game, civ, flavors);
 }
 
-// Take the turn of every CPU civ in a row, until a human seat, a winner or
-// the turn cap. The simulator, the tests and the server's rooms all use it.
+// Take the turn of every CPU civ in a row, until a human seat, a winner, the
+// turn cap, or the moment the last human civ is eliminated: the turn order
+// skips eliminated civs, so without that stop the AI would play the rest of
+// the game in one call. An AI-only game (the simulator) has no human to lose.
+// The simulator, the tests and the server's rooms all use it.
 function runCpuTurns(game, maxTurn = Infinity) {
-    while (game.winner === null && game.turn <= maxTurn && game.currentCiv().isCpu) {
+    while (game.winner === null && game.turn <= maxTurn && game.currentCiv().isCpu && !humansAllOut(game)) {
         aiTakeTurn(game, game.currentCiv());
         game.endTurn();
     }
+}
+
+// True when the game had human civs and every one of them is eliminated.
+function humansAllOut(game) {
+    const humans = game.civs.filter(c => !c.isCpu);
+    return humans.length > 0 && humans.every(c => c.isEliminated);
 }
 
 if (typeof module !== 'undefined' && module.exports) module.exports = { aiTakeTurn, runCpuTurns };

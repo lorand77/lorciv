@@ -217,3 +217,67 @@ test("a failed write rolls the room back and tells the player", async (t) => {
   assert.deepEqual(again.state.snapshot, state.snapshot, "nothing changed");
   assert.equal(queries.getGameById.get(gameId).seq, 0);
 });
+
+test("an engine error rolls the room back: nothing half-applied stays in memory", async (t) => {
+  const { gameId, socket, state } = await newGame(t, "thrower");
+  const room = rooms.getRoom(gameId);
+  const broken = room.game;
+  // The engine changes the game, then throws, as a rule bug would.
+  const endTurn = broken.endTurn.bind(broken);
+  broken.endTurn = () => { endTurn(); throw new Error("rule bug"); };
+  const logs = captureLogs();
+  t.after(() => logs.restore());
+  const quiet = expectNo(socket, "game:state");
+  const res = await act(socket, gameId, state, { type: "endTurn" });
+  assert.equal(res.ok, false);
+  assert.equal(await quiet, true);
+  assert.equal(logs.find("socket.handler_failed", { event: "game:action" }).fields.err, "Error: rule bug");
+  assert.equal(broken.currentPlayer, 1, "the broken engine had moved on");
+  assert.notEqual(room.game, broken, "the engine was rebuilt from the last write");
+  assert.equal(room.game.currentPlayer, 0);
+  const again = await emitAck(socket, "game:join", { gameId });
+  assert.equal(again.state.seq, 0);
+  assert.deepEqual(again.state.snapshot, state.snapshot, "nothing changed");
+  // The rebuilt engine is a plain one, and the same action now goes through.
+  const next = waitFor(socket, "game:state");
+  assert.equal((await act(socket, gameId, again.state, { type: "endTurn" })).ok, true);
+  assert.equal((await next).seq, 1);
+});
+
+test("the last human civ eliminated, the game is abandoned rather than played out", async (t) => {
+  const { gameId, socket, state } = await newGame(t, "conquered");
+  const room = rooms.getRoom(gameId);
+  // The human's civ falls during this round, as a conquest would.
+  const endTurn = room.game.endTurn.bind(room.game);
+  room.game.endTurn = () => { room.game.civs[0].isEliminated = true; endTurn(); };
+  const logs = captureLogs();
+  t.after(() => logs.restore());
+  const next = waitFor(socket, "game:state");
+  assert.equal((await act(socket, gameId, state, { type: "endTurn" })).ok, true);
+  const s1 = await next;
+  assert.equal(s1.status, "aborted");
+  assert.equal(s1.winner, null);
+  assert.equal(deserializeGame(s1.snapshot).turn, 1, "the AI did not play on");
+  assert.ok(logs.find("game.abort", { game: gameId, reason: "no_humans" }));
+  assert.equal(queries.getGameById.get(gameId).status, "aborted");
+});
+
+test("a game that cannot be rebuilt is skipped at boot; the others resume", async (t) => {
+  const good = await newGame(t, "survivor");
+  const bad = await newGame(t, "corrupt");
+  good.socket.close();
+  bad.socket.close();
+  await srv.close();
+  const row = queries.getGameById.get(bad.gameId);
+  const snapshot = JSON.parse(row.snapshot);
+  snapshot.version = 999;
+  db().prepare("UPDATE games SET snapshot = ? WHERE id = ?").run(JSON.stringify(snapshot), bad.gameId);
+
+  const logs = captureLogs();
+  t.after(() => logs.restore());
+  srv = await startServer();
+  assert.ok(logs.find("game.resume_failed", { game: bad.gameId }));
+  assert.ok(logs.find("game.resume", { game: good.gameId }));
+  assert.ok(rooms.listRooms().some((r) => r.gameId === good.gameId));
+  assert.equal(queries.getGameById.get(bad.gameId).status, "active", "left in the database as it was");
+});

@@ -47,9 +47,9 @@ function replayStep(game, seats, rec) {
         if (!res.ok) return res;
         seats[seat].missedTurns = 0;
     }
-    // With nobody human left the server abandoned the game instead of letting
-    // the AI play on.
-    if (seats.some(s => s.kind === "human")) {
+    // With nobody human left in the game (seats handed to the AI, civs
+    // eliminated) the server abandoned it instead of letting the AI play on.
+    if (seats.some((s, i) => s.kind === "human" && !game.civs[i].isEliminated)) {
         runCpuTurns(game);
         game.checkVictory();
     }

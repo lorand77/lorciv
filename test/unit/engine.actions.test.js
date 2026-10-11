@@ -154,4 +154,40 @@ describe("applyAction", () => {
     assert.equal(g.turn, 2);
     assert.equal(g.scoreHistory.length, 1);
   });
+
+  test("a key must be the catalogue's own string: no inherited names, no arrays", () => {
+    const settler = unitOf(g, 0, "settler");
+    assert.equal(applyAction(g, 0, { type: "foundCity", unitId: settler.id }).ok, true);
+    const city = g.civs[0].cities[0];
+    const worker = unitOf(g, 0, "worker");
+    g.civs[0].gold = 500;
+    for (const key of ["constructor", "__proto__", "toString", "hasOwnProperty", ["settler"], ["warrior"], 7, null]) {
+      for (const type of ["buy", "setProduction"]) {
+        assert.equal(applyAction(g, 0, { type, cityId: city.id, key }).message, "Unknown item.", `${type} ${String(key)}`);
+      }
+      assert.equal(applyAction(g, 0, { type: "setResearch", key }).message, "Unknown technology.", String(key));
+      assert.equal(applyAction(g, 0, { type: "buildImprovement", unitId: worker.id, key }).message, "Unknown improvement.", String(key));
+    }
+    assert.equal(g.civs[0].gold, 500);
+    assert.deepEqual(city.buildings, ["palace"]);
+    assert.equal(g.civs[0].units.length, 2, "the settler founded the city; nothing was bought");
+    assert.equal(applyAction(g, 0, { type: "buy", cityId: city.id, key: "warrior" }).ok, true, "a real key still works");
+    assert.equal(applyAction(g, 0, { type: "setResearch", key: "pottery" }).ok, true);
+  });
+
+  test("the AI stops the moment the last human civ is eliminated", () => {
+    applyAction(g, 0, { type: "endTurn" });
+    // Seat 1's turn wipes seat 0 out, as a conquest would.
+    const endTurn = g.endTurn.bind(g);
+    g.endTurn = () => { g.civs[0].isEliminated = true; endTurn(); };
+    runCpuTurns(g);
+    assert.equal(g.currentPlayer, 2, "seat 1 played; nobody after it");
+    assert.equal(g.turn, 1);
+    assert.equal(g.winner, null);
+
+    // An AI-only game has no human to lose, and plays on.
+    const sim = new Game({ seed: 11, cpuFlags: [true, true, true, true] });
+    runCpuTurns(sim, 3);
+    assert.equal(sim.turn, 4);
+  });
 });

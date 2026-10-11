@@ -703,6 +703,11 @@ class Game {
         city.hp    = 50;
         city.productionQueue.length = 0;
         city.productionProgress = 0;
+        // The palace belongs to its civ, not to the city: a conqueror would
+        // otherwise collect a palace's yields for every capital it holds.
+        // Taking one's own capital back brings it back.
+        city.buildings = city.buildings.filter(b => b !== 'palace');
+        if (newCiv.originalCapital === city) city.buildings.push('palace');
 
         // Voronoi territory transfer
         const survivingOldCities = oldCiv.cities.map(c => [c.q, c.r]);

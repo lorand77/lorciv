@@ -175,6 +175,28 @@ describe("applyAction", () => {
     assert.equal(applyAction(g, 0, { type: "setResearch", key: "pottery" }).ok, true);
   });
 
+  test("a captured capital loses its palace; taking one's own back restores it", () => {
+    applyAction(g, 0, { type: "endTurn" });
+    runCpuTurns(g); // the AI seats found their capitals
+    const capital = g.civs[1].originalCapital;
+    assert.ok(capital.buildings.includes("palace"));
+    const conqueror = new Unit({ id: g.nextId++, unitType: "warrior", owner: 0, q: capital.q, r: capital.r });
+    g.civs[0].units.push(conqueror);
+    g._captureCity(conqueror, capital);
+    assert.equal(capital.owner, 0);
+    assert.equal(capital.buildings.includes("palace"), false);
+    assert.equal(g.civs[0].cities.filter((c) => c.buildings.includes("palace")).length, 0,
+      "seat 0 has not founded yet: no palace of its own, none taken");
+
+    // Seat 1 retakes its capital.
+    g.civs[1].isEliminated = false;
+    const liberator = new Unit({ id: g.nextId++, unitType: "warrior", owner: 1, q: capital.q, r: capital.r });
+    g.civs[1].units.push(liberator);
+    g._captureCity(liberator, capital);
+    assert.equal(capital.owner, 1);
+    assert.equal(capital.buildings.filter((b) => b === "palace").length, 1);
+  });
+
   test("the AI stops the moment the last human civ is eliminated", () => {
     applyAction(g, 0, { type: "endTurn" });
     // Seat 1's turn wipes seat 0 out, as a conquest would.

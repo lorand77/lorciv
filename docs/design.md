@@ -373,7 +373,11 @@ original's single quotes and four-space indent: match the file you are in.
 Units and cities have an integer `id` from `game.nextId`, assigned at the
 three places the engine creates them: the starting units, production
 (`_completeItem`, also reached by buying) and `foundCity`. A city keeps its id
-through capture. `game.unitById(id)` and `game.cityById(id)` are linear scans
+through capture, and its buildings except the palace, which belongs to its
+civ: a conqueror would otherwise collect a palace's yields for every capital
+it took (the original did, a departure made on 2026-10-11). A civ that takes
+its own original capital back gets its palace back; the palace is not moved
+to another city while the capital is lost. `game.unitById(id)` and `game.cityById(id)` are linear scans
 over the civs; a game has a few dozen of each, and a scan beats keeping an
 index in step with every capture. Clients name a unit or city by id and never
 by position; object identity never crosses the wire.

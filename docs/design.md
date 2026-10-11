@@ -89,6 +89,8 @@ docs/          CLAUDE.md design.md plan.md setup.md
 - **Username policy** (`src/auth/usernamePolicy.js`): beyond 3–20 of
   `[A-Za-z0-9_]`, registration refuses names containing "lor" anywhere (the
   owner's prefix, shared with LorChess; this knowingly costs Taylor and Lord),
+  with one exception: `lorand`, the owner's own name, in exactly that spelling
+  (no capitals, no digits, nothing appended),
   names that pass for staff or for a UI label (admin, mod, bot, guest, cpu,
   player, spectator…), and English slurs and profanity. Names are compared
   lowercased, without underscores, with digits read as letters and stretched

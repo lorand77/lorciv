@@ -20,10 +20,15 @@ describe("usernameProblem", () => {
   test("lor anywhere, digits read as letters", () => {
     expectAll([
       "Lorenzo", "Taylor", "sailor", "tailor", "color", "Lord", "Gloria", "glory", "Florida",
-      "explorer", "valor", "chlorine", "L0rd", "1or", "L0rd2", "Tay_lor", "lorand",
+      "explorer", "valor", "chlorine", "L0rd", "1or", "L0rd2", "Tay_lor",
       "LorCiv", "lorciv_fan", "LorChess", "L0rCiv",
     ], "lor");
     expectAll(["Floor", "Moor", "Laura", "Lior"], null);
+  });
+
+  test("the owner's name is allowed in its exact spelling and no other", () => {
+    expectAll(["lorand"], null);
+    expectAll(["Lorand", "LORAND", "lorand1", "lorand_x", "l0rand", "lorand77"], "lor");
   });
 
   test("reserved: staff words anywhere, short ones as parts, UI labels whole", () => {

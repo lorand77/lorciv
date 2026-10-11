@@ -16,8 +16,11 @@
 // profanity); "part" words must be a whole part, so short words don't hit
 // ordinary ones (ass/classic, mod/modern, sex/Essex).
 
-// Rule 1: anywhere in plain or leet. Also covers LorCiv and LorChess.
+// Rule 1: anywhere in plain or leet. Also covers LorCiv and LorChess. The one
+// exception is the owner's own name, in this exact spelling and no other:
+// Lorand, LORAND, lorand1 and lorand_ are still refused.
 const LOR = "lor";
+const OWNER = "lorand";
 
 // Rule 2: names that pass for the site, its staff, or a UI label.
 const RESERVED_ANYWHERE = ["admin", "moderator", "official", "support", "staff", "system"];
@@ -76,6 +79,7 @@ function withoutAllowed(reading, squeezed) {
 // Why `name` may not be registered ("shape", "lor", "reserved", "offensive"),
 // or null if it may. Assumes the name already passed routes.js's format check.
 function usernameProblem(name) {
+  if (name === OWNER) return null;
   if (!/[A-Za-z]/.test(name) || /^_|_$|__/.test(name)) return "shape";
 
   const plain = name.toLowerCase().replace(/_/g, "");

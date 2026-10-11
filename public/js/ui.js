@@ -67,6 +67,7 @@ let formerSeat = null; // our seat before the AI took it over, or null
 let renderer = null;
 let pending  = false;  // an action is awaiting the server's answer
 let _victoryShown = false;
+let techPromptTurn = null; // the round whose start the tech tree was offered at
 
 // Selection is by id: the objects are replaced with every snapshot.
 let sel = { unitId: null, cityId: null, reachable: new Map(), attackable: new Set() };
@@ -195,8 +196,8 @@ function applyState(state) {
     renderer.draw();
 
     if (game.winner !== null) { closeTechTree(); showVictoryScreen(game.winner); return; }
-    if (isMyTurn() && !sel.unitId && !sel.cityId) maybeOpenTechTree();
-    else if (!isMyTurn()) closeTechTree();
+    if (isMyTurn()) maybeOpenTechTree();
+    else closeTechTree();
 }
 
 // Keep the selection across snapshots when it still makes sense: our unit
@@ -213,7 +214,12 @@ function reselect() {
     deselect();
 }
 
+// At the start of our turn only: the first snapshot of the turn decides.
+// Every action brings a snapshot, so without the check the tree reopened
+// whenever a move left nothing selected, though the player had closed it.
 function maybeOpenTechTree() {
+    if (techPromptTurn === game.turn) return;
+    techPromptTurn = game.turn;
     const civ = myCiv();
     if (civ && !civ.currentResearch && availableTechs(civ.techsResearched).length > 0) openTechTree();
 }

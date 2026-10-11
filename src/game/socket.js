@@ -150,7 +150,8 @@ function handleJoin(io, socket, payload, ack) {
     return reply(ack, { ok: false, error: row && row.status === "lobby" ? "not_started" : "no_such_game" });
   }
   socket.join(gameRoom(room.gameId));
-  socket.log.debug("game.join", { game: room.gameId, seat: rooms.seatOf(room, socket.userId) });
+  const seat = rooms.seatOf(room, socket.userId);
+  socket.log.info("game.join", { game: room.gameId, seat: seat ?? undefined, watcher: seat === null ? true : undefined });
   const state = rooms.viewFor(room, socket.userId);
   state.chat = queries.listChat.all(room.gameId, CHAT_HISTORY).reverse().map(chatView);
   reply(ack, { ok: true, state });
@@ -197,7 +198,17 @@ function handleAction(io, socket, payload, ack) {
     q: payload.q, r: payload.r, key: payload.key,
   };
   // On success rooms.js emits "state" and the room is broadcast from there.
-  reply(ack, rooms.applyPlayerAction(room, seat, socket.userId, action));
+  const res = rooms.applyPlayerAction(room, seat, socket.userId, action);
+  // One line per accepted action: the type, never the payload, which is in
+  // game_actions anyway. Refusals at debug, for chasing a client bug.
+  if (res.ok) {
+    socket.log.info("game.action", {
+      game: room.gameId, seq: room.seq, turn: room.game.turn, seat, type: action.type,
+    });
+  } else {
+    socket.log.debug("game.action_refused", { game: room.gameId, seat, type: action.type, error: res.error });
+  }
+  reply(ack, res);
 }
 
 // Each socket gets its own view (rooms.viewFor), so a per-seat filter such as

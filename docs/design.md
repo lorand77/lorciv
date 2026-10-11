@@ -212,7 +212,12 @@ Events:
   (`game`, `winner`, `turn`, `seq`), `game.abort` (`game`, `reason=no_humans`),
   `game.abandon_sweep` (`aborted`, `days`), `game.persist_failed` (`error`: the
   write after an action failed and the room was rolled back),
-  `game.sweep_failed` (`error`), and `game.join` at `debug`. No line per action.
+  `game.sweep_failed` (`error`), `game.join` (`game`, `seat` or
+  `watcher=true`), and `game.action` once per accepted player action (`game`,
+  `seq`, `turn`, `seat`, `type`: the kind of action, never its payload, which
+  `game_actions` holds). `game.action_refused` (`type`, `error`) at `debug`.
+  The server's own actions have their own lines (`game.timeout`,
+  `game.takeover`).
 - **Process, continued:** `process.resumed` (`games`: active games rebuilt at boot).
 - **Chat:** `chat.retention` (`removed`, `days`), `chat.retention_failed`
   (`error`). Never the text.

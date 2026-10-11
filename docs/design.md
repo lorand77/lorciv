@@ -754,7 +754,9 @@ AI or every human civ was eliminated, the game is **aborted** (`game.abort`,
 `reason=no_humans`) rather than played out by the AI, and it is aborted before
 the AI would have played, which matters: a whole AI game takes seconds. A
 human civ eliminated by the AI mid-round stops `runCpuTurns` right there. A
-game lost that way is therefore not on the leaderboard, like one left.
+game abandoned this way counts on the leaderboard only when two or more
+people played it, as a loss for each (see "Looking back"); a solo game against
+the AI does not count.
 
 ### Several humans in one game
 
@@ -791,8 +793,17 @@ line.
 ## Looking back: leaderboard and replays
 
 **Leaderboard.** `GET /api/leaderboard` (`src/game/leaderboard.js`,
-`queries.leaderboard`): every active account with a seat in a finished game,
+`queries.leaderboard`): every active account with a seat in a counted game,
 with games played and games won, top 100 by wins, the sort and the cut in SQL.
+A finished game counts. So does an abandoned one (aborted after it started:
+no human left in it, or the abandon sweep) that two or more people played, as
+a loss for each of them, so walking out on other people does not keep a
+defeat off the board; a seat handed to the AI keeps its user, so those who
+left are counted. A solo game abandoned does not count, nor a table cancelled
+before it started. "Played" means made a move, an action row of one's own
+other than a leave (timeouts have no user): a game someone never moved in,
+their turns running out until the AI took the seat, is no loss of theirs, and
+they do not make an abandoned game one of two people.
 A win counts for the person who was still playing the seat at the end; a seat
 the AI took over and then won is the person's game but not their win.
 Deactivated and deleted accounts are left off. `leaderboard.html` renders it

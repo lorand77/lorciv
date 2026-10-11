@@ -63,17 +63,36 @@ module.exports = {
   `),
 
   // --- leaderboard (src/game/leaderboard.js) ---
-  // Every active account with a seat in a finished game: games played, and
+  // Every active account with a seat in a counted game: games played, and
   // games won while still playing the seat (a seat the AI took over and then
-  // won is not the person's win). Top 100 by wins.
+  // won is not the person's win). Top 100 by wins. A finished game counts; so
+  // does an abandoned one (aborted after it started) that two or more people
+  // played, as a loss for each of them: walking out on other people is not a
+  // way to keep a defeat off the board. A solo game abandoned does not count,
+  // nor a table cancelled before it started. user_id stays on a seat the AI
+  // took over, so those who left are counted.
+  //
+  // "Played" means made a move: an action row of theirs other than a leave
+  // (the server's timeouts have no user). Someone who never moved, whose
+  // turns ran out until the AI took the seat, has not played the game, so it
+  // is no loss of theirs and does not make an abandoned game one of two.
   leaderboard: db.prepare(`
     SELECT u.id, u.username,
            COUNT(*) AS games,
-           SUM(CASE WHEN g.winner_seat = s.seat AND s.kind = 'human' THEN 1 ELSE 0 END) AS wins
+           SUM(CASE WHEN g.status = 'finished' AND g.winner_seat = s.seat AND s.kind = 'human' THEN 1 ELSE 0 END) AS wins
     FROM users u
     JOIN game_seats s ON s.user_id = u.id
-    JOIN games g ON g.id = s.game_id AND g.status = 'finished'
+    JOIN games g ON g.id = s.game_id AND (
+      g.status = 'finished'
+      OR (g.status = 'aborted' AND g.started_at IS NOT NULL
+          AND (SELECT COUNT(DISTINCT m.user_id) FROM game_actions m
+               WHERE m.game_id = g.id AND m.user_id IS NOT NULL
+                 AND json_extract(m.action, '$.type') <> 'leave') >= 2)
+    )
     WHERE u.deactivated_at IS NULL
+      AND EXISTS (SELECT 1 FROM game_actions m
+                  WHERE m.game_id = g.id AND m.user_id = u.id
+                    AND json_extract(m.action, '$.type') <> 'leave')
     GROUP BY u.id
     ORDER BY wins DESC, games ASC, u.username COLLATE NOCASE ASC
     LIMIT 100

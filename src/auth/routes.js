@@ -5,6 +5,8 @@
 const express = require("express");
 const argon2 = require("argon2");
 const queries = require("../db/queries");
+const config = require("../config");
+const { clearOptions } = require("./session");
 const { requireAuth } = require("./middleware");
 const { loginFailures, registrations, acquireHashSlot } = require("./throttle");
 const { usernameProblem } = require("./usernamePolicy");
@@ -161,7 +163,7 @@ router.post("/logout", (req, res) => {
     }
     req.log.info("auth.logout");
     disconnectSessionSockets(req, sessionId);
-    res.clearCookie("connect.sid");
+    res.clearCookie(config.SESSION_COOKIE, clearOptions);
     res.json({ ok: true });
   });
 });

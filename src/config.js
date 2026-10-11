@@ -10,9 +10,21 @@ function intEnv(name, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+// Production (NODE_ENV=production, in the server's .env) is served only over
+// HTTPS behind Caddy. There the session cookie carries the __Host- prefix,
+// which a browser accepts only with Secure, Path=/ and no Domain: a page on a
+// sibling *.lorand77.dev host can then not plant a cookie of that name to swap
+// the user into a session of its own. Development is plain HTTP on localhost,
+// where a Secure cookie would not do, so it uses a plain name; not
+// connect.sid, which LorChess uses, and localhost shares cookies across ports.
+const PRODUCTION = process.env.NODE_ENV === "production";
+
 // Central place for env-driven constants. Everything the environment can set
 // is declared here; nothing else reads process.env.
 module.exports = {
+  PRODUCTION,
+  SESSION_COOKIE: PRODUCTION ? "__Host-lorciv.sid" : "lorciv.sid",
+
   // LorChess has 3000 on the machine the two apps share; a different default
   // keeps them apart in development as well.
   PORT: intEnv("PORT", 3001),

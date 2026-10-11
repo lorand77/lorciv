@@ -51,6 +51,22 @@ function requestLog(req, res, next) {
   next();
 }
 
+// Sent with every response. No page of LorCiv may be shown inside another
+// page: a sibling *.lorand77.dev host is the same site to the browser, so a
+// page there could frame the lobby or the game and trick a click (joining,
+// leaving, ending a turn) that the origin check cannot tell from a real one,
+// because it is one. frame-ancestors is the current form; X-Frame-Options is
+// for older browsers. nosniff keeps a browser from running a response as a
+// type other than the one sent.
+function securityHeaders(req, res, next) {
+  res.set({
+    "Content-Security-Policy": "frame-ancestors 'none'",
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+  });
+  next();
+}
+
 // Errors no handler dealt with: Express 5 passes thrown errors and rejected
 // promises here. Logged with the request id and the stack, answered with
 // neither. Express's own handler would print to stderr, outside the log.
@@ -70,6 +86,9 @@ function createServer() {
   // X-Forwarded-Proto — required for the session cookie's secure:"auto" to
   // activate over HTTPS.
   app.set("trust proxy", 1);
+  // Nothing needs to know what the server runs on.
+  app.disable("x-powered-by");
+  app.use(securityHeaders);
 
   // --- API: JSON body parsing, sessions, routers ---
   app.use(sessionMiddleware);

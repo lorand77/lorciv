@@ -6,7 +6,7 @@
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  startServer, client, registerUser, connectSocket, waitFor, expectNo, db,
+  startServer, client, registerUser, connectSocket, waitFor, expectNo, db, COOKIE,
 } = require("../helpers/server");
 const { captureLogs } = require("../helpers/logs");
 const { Manager } = require("socket.io-client");
@@ -46,7 +46,7 @@ test("logout disconnects every tab sharing the session", async (t) => {
   assert.equal(reason2, "io server disconnect");
 
   const stale = client(srv.baseUrl);
-  stale.setCookie("connect.sid", cookie);
+  stale.setCookie(COOKIE, cookie);
   assert.equal((await stale.get("/api/me")).status, 401);
   await assert.rejects(connectSocket(srv.baseUrl, cookie), /unauthorized/);
 });
@@ -82,7 +82,7 @@ test("logout between the transport handshake and socket connect rejects the stal
   const { c } = await registerUser(srv.baseUrl, "late");
   const manager = new Manager(srv.baseUrl, {
     autoConnect: false, transports: ["websocket"], reconnection: false,
-    extraHeaders: { Cookie: `connect.sid=${c.cookie()}` },
+    extraHeaders: { Cookie: `${COOKIE}=${c.cookie()}` },
   });
   const socket = manager.socket("/");
   t.after(() => { socket.close(); manager.engine.close(); });

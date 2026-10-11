@@ -6,7 +6,7 @@
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { startServer, registerUser } = require("../helpers/server");
+const { startServer, registerUser, COOKIE } = require("../helpers/server");
 const { captureLogs } = require("../helpers/logs");
 const { io: ioClient } = require("socket.io-client");
 
@@ -20,7 +20,7 @@ const SEATS = [{ kind: "human" }, { kind: "ai" }, { kind: "ai" }, { kind: "ai" }
 // A request carrying the user's cookie and the given Origin, as a browser on
 // that origin would send it.
 function asFrom(origin, cookie, method, path, body) {
-  const headers = { Cookie: `connect.sid=${cookie}` };
+  const headers = { Cookie: `${COOKIE}=${cookie}` };
   if (origin !== undefined) headers.Origin = origin;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   return fetch(srv.baseUrl + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -31,7 +31,7 @@ function socketFrom(origin, cookie) {
   return new Promise((resolve) => {
     const socket = ioClient(srv.baseUrl, {
       transports: ["websocket"],
-      extraHeaders: { Cookie: `connect.sid=${cookie}`, Origin: origin },
+      extraHeaders: { Cookie: `${COOKIE}=${cookie}`, Origin: origin },
       reconnection: false,
       forceNew: true,
     });

@@ -5,7 +5,7 @@
 
 const { describe, test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { startServer, client, uniqueName, registerUser } = require("../helpers/server");
+const { startServer, client, uniqueName, registerUser, COOKIE } = require("../helpers/server");
 
 let srv;
 before(async () => { srv = await startServer(); });
@@ -119,7 +119,7 @@ describe("login and logout", () => {
     assert.equal(res.status, 200);
     assert.notEqual(c.cookie(), before, "session regenerated on login");
     const stale = client(srv.baseUrl);
-    stale.setCookie("connect.sid", before);
+    stale.setCookie(COOKIE, before);
     assert.equal((await stale.get("/api/me")).status, 401);
     assert.equal((await c.get("/api/me")).status, 200);
   });
@@ -132,7 +132,7 @@ describe("login and logout", () => {
     assert.deepEqual(out.body, { ok: true });
     assert.equal(c.cookie(), undefined, "the cookie was cleared");
     const stale = client(srv.baseUrl);
-    stale.setCookie("connect.sid", cookie);
+    stale.setCookie(COOKIE, cookie);
     assert.equal((await stale.get("/api/me")).status, 401);
   });
 
@@ -142,7 +142,7 @@ describe("login and logout", () => {
     await srv.close();
     srv = await startServer();
     const again = client(srv.baseUrl);
-    again.setCookie("connect.sid", cookie);
+    again.setCookie(COOKIE, cookie);
     const me = await again.get("/api/me");
     assert.equal(me.status, 200);
     assert.equal(me.body.id, user.id);
@@ -159,7 +159,7 @@ describe("access control", () => {
 
   test("a forged or garbage cookie is not a session", async () => {
     const forged = client(srv.baseUrl);
-    forged.setCookie("connect.sid", "s%3Aforged.signature");
+    forged.setCookie(COOKIE, "s%3Aforged.signature");
     assert.equal((await forged.get("/api/me")).status, 401);
   });
 

@@ -23,6 +23,10 @@ process.env.REGISTER_MAX ??= "100000";
 process.env.HASH_MAX_CONCURRENT ??= "100000";
 process.on("exit", () => fs.rmSync(dir, { recursive: true, force: true }));
 
+// The session cookie's name, which depends on NODE_ENV (src/config.js). That
+// module only reads the environment, so loading it here is safe.
+const COOKIE = require("../../src/config").SESSION_COOKIE;
+
 // The server logs connections and the first load of the database logs its
 // migrations. Keep the test output to the runner's own report unless TEST_LOG
 // is set, which shows everything down to debug.
@@ -83,7 +87,7 @@ function client(baseUrl) {
     post: (p, body = {}) => request("POST", p, body),
     put: (p, body = {}) => request("PUT", p, body),
     del: (p) => request("DELETE", p),
-    cookie: (name = "connect.sid") => jar.get(name),
+    cookie: (name = COOKIE) => jar.get(name),
     setCookie: (name, value) => jar.set(name, value),
     clearCookies: () => jar.clear(),
   };
@@ -107,7 +111,7 @@ async function registerUser(baseUrl, base = "user", password = "hunter22") {
   return { c, user: res.body, password };
 }
 
-module.exports = { startServer, client, uniqueName, registerUser };
+module.exports = { startServer, client, uniqueName, registerUser, COOKIE };
 
 // ---- Socket.IO ----
 
@@ -120,7 +124,7 @@ const openSockets = new Set();
 function connectSocket(baseUrl, cookie) {
   const socket = ioClient(baseUrl, {
     transports: ["websocket"],
-    extraHeaders: cookie ? { Cookie: `connect.sid=${cookie}` } : {},
+    extraHeaders: cookie ? { Cookie: `${COOKIE}=${cookie}` } : {},
     reconnection: false,
     forceNew: true,
   });

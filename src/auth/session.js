@@ -20,21 +20,34 @@ class Store extends SqliteStore {
   }
 }
 
+// The cookie, as express-session sets it and logout clears it. `secure` is
+// "auto" in development (set only over HTTPS) and always on in production,
+// where the __Host- name requires it (see SESSION_COOKIE in src/config.js): a
+// request that reached the app over plain HTTP gets no cookie at all.
+const COOKIE = {
+  httpOnly: true,           // not readable from JS — mitigates XSS theft
+  sameSite: "lax",
+  secure: config.PRODUCTION ? true : "auto",
+  path: "/",
+};
+
 const sessionMiddleware = session({
   store: new Store({
     client: db,
     // Periodically purge expired rows from the sessions table.
     expired: { clear: true, intervalMs: 15 * 60 * 1000 },
   }),
+  name: config.SESSION_COOKIE,
   secret: config.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
-    httpOnly: true,           // not readable from JS — mitigates XSS theft
-    sameSite: "lax",
-    secure: "auto",           // secure over HTTPS (prod, via trust proxy); off on localhost HTTP
+    ...COOKIE,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   },
 });
 
 module.exports = sessionMiddleware;
+// For res.clearCookie, which needs a boolean: a __Host- cookie is only
+// overwritten by one that is Secure too.
+module.exports.clearOptions = { ...COOKIE, secure: config.PRODUCTION };

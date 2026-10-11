@@ -87,8 +87,27 @@ docs/          CLAUDE.md design.md plan.md setup.md
   Sockets also join a room per session ID: logout and session regeneration
   disconnect every tab using the old session before returning success.
   Separate logins on the same account remain connected.
-- Cookie: `httpOnly`, `sameSite: lax`, `secure: "auto"` behind `trust proxy`
-  (Caddy terminates TLS), 7 days. Sessions are rows in SQLite.
+- Cookie: `httpOnly`, `sameSite: lax`, `path: /`, 7 days. Sessions are rows
+  in SQLite. In production (`NODE_ENV=production`) it is `__Host-lorciv.sid`
+  and always `Secure` (Caddy terminates TLS; `trust proxy` lets the app see
+  it): a browser accepts that prefix only from the host itself, Secure, with
+  `Path=/` and no `Domain`, so a page on a sibling `*.lorand77.dev` host
+  cannot plant a cookie of that name and swap the user into a session of its
+  own. Plain HTTP gets no cookie at all there. In development it is
+  `lorciv.sid` with `secure: "auto"`, since localhost is plain HTTP; not
+  `connect.sid`, which LorChess uses, and localhost shares cookies across
+  ports. Logout clears it with the same attributes, without which a browser
+  would not overwrite a `__Host-` cookie.
+- **No framing** (`securityHeaders` in `src/app.js`). Every response says
+  `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options:
+  DENY`, so no page of LorCiv can be shown inside another: a sibling host
+  could otherwise frame the lobby or the game and trick a click, which the
+  origin check below cannot catch because the click is a real one. Express's
+  own 404 page swaps the CSP for its stricter `default-src 'none'`; it has
+  nothing to click and keeps `X-Frame-Options`. Responses also carry
+  `X-Content-Type-Options: nosniff`, and `X-Powered-By` is off. There is no
+  fuller CSP yet: the game page's inline `style` attributes would need it to
+  allow inline styles.
 - **Same origin only** (`src/auth/origin.js`). `lax` keeps other sites out but
   not other hosts of this one: `lorchess.lorand77.dev` is the same site to a
   browser, so a script there would have the cookie sent with a socket it

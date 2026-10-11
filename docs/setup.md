@@ -175,7 +175,14 @@ chmod 600 .env
   obtains a session id (from logs or a DB backup) can turn it into a valid
   cookie. Use a different value per environment and never commit it. Changing it
   invalidates all existing sessions, i.e. logs everyone out.
-- `NODE_ENV=production` — puts Express in production mode. npm never reads
+- `NODE_ENV=production` — puts Express in production mode, and names the
+  session cookie `__Host-lorciv.sid`, always `Secure` (`src/config.js`): a
+  page on another `*.lorand77.dev` host cannot then plant a cookie of that
+  name. The app must then be reached over HTTPS, through Caddy; a request
+  straight to port 3001 over HTTP gets no session cookie and cannot sign in.
+  Without it the cookie is `lorciv.sid`, as in development. Turning it on, or
+  deploying the change that introduced the name (2026-10-11), signs everyone
+  out once: their old cookie has a different name. npm never reads
   `.env`, so it does not make `npm ci` skip devDependencies: that is what
   `--omit=dev` is for. (Uncaught errors never send a stack trace to
   the client either way: `src/app.js` answers them itself.)

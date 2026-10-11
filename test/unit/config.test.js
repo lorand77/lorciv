@@ -11,6 +11,7 @@ const CONFIG = require.resolve("../../src/config");
 const VARS = [
   "PORT", "SESSION_SECRET", "DB_PATH", "DEACTIVATION_SWEEP_MS", "DEADLINE_SWEEP_MS", "ABANDON_DAYS",
   "CHAT_RETENTION_DAYS", "AUTH_WINDOW_MS", "LOGIN_MAX_FAILURES", "REGISTER_MAX", "HASH_MAX_CONCURRENT", "LOG_LEVEL",
+  "NODE_ENV",
 ];
 
 function loadConfig(env = {}) {
@@ -66,6 +67,13 @@ describe("config", () => {
     assert.equal(c.REGISTER_MAX, 1);
     assert.equal(c.HASH_MAX_CONCURRENT, 4);
     assert.equal(c.LOG_LEVEL, "debug");
+  });
+
+  test("the session cookie is __Host-lorciv.sid in production, lorciv.sid otherwise", () => {
+    assert.deepEqual([loadConfig().PRODUCTION, loadConfig().SESSION_COOKIE], [false, "lorciv.sid"]);
+    const prod = loadConfig({ NODE_ENV: "production" });
+    assert.deepEqual([prod.PRODUCTION, prod.SESSION_COOKIE], [true, "__Host-lorciv.sid"]);
+    assert.equal(loadConfig({ NODE_ENV: "development" }).SESSION_COOKIE, "lorciv.sid");
   });
 
   test("unparseable numbers fall back to the defaults", () => {

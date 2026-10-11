@@ -31,7 +31,10 @@ test("replaying the recorded actions reproduces the stored game, step by step", 
   t.after(() => { a.close(); b.close(); });
   let sa = (await emitAck(a, "game:join", { gameId: id })).state;
   await emitAck(b, "game:join", { gameId: id });
-  const snapshots = [sa.snapshot];
+  // What the server stored after each step, in full: the snapshots players
+  // get leave out the random-number state and the AI's memory.
+  const stored = () => JSON.parse(rooms.getRoom(id).lastSnapshot);
+  const snapshots = [stored()];
 
   // Alice: move the settler, found a city, pick research, end the turn.
   const game = deserializeGame(sa.snapshot);
@@ -47,7 +50,7 @@ test("replaying the recorded actions reproduces the stored game, step by step", 
     const next = waitFor(a, "game:state");
     assert.equal((await act(a, id, sa, action)).ok, true, action.type);
     sa = await next;
-    snapshots.push(sa.snapshot);
+    snapshots.push(stored());
   }
   // Bob's turn runs out, twice; then he leaves, so the AI takes seat 2.
   const room = rooms.getRoom(id);
@@ -55,16 +58,16 @@ test("replaying the recorded actions reproduces the stored game, step by step", 
     const next = waitFor(a, "game:state");
     assert.equal(rooms.expireTurn(room, room.deadline + 1), true);
     sa = await next;
-    snapshots.push(sa.snapshot);
+    snapshots.push(stored());
     const mine = waitFor(a, "game:state");
     assert.equal((await act(a, id, sa, { type: "endTurn" })).ok, true);
     sa = await mine;
-    snapshots.push(sa.snapshot);
+    snapshots.push(stored());
   }
   const left = waitFor(a, "game:state");
   assert.deepEqual(await emitAck(b, "game:leave", { gameId: id }), { ok: true });
   sa = await left;
-  snapshots.push(sa.snapshot);
+  snapshots.push(stored());
   assert.equal(sa.seats[2].kind, "ai");
 
   // Still being played: no replay, for players or anyone else.
@@ -75,7 +78,7 @@ test("replaying the recorded actions reproduces the stored game, step by step", 
   const over = waitFor(a, "game:state");
   assert.deepEqual(await emitAck(a, "game:leave", { gameId: id }), { ok: true });
   sa = await over;
-  snapshots.push(sa.snapshot);
+  snapshots.push(stored());
   assert.equal(sa.status, "aborted");
 
   const record = (await alice.c.get(`/api/games/${id}/replay`)).body;

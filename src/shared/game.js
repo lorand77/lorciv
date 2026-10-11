@@ -182,6 +182,14 @@ function getItemCost(itemKey) {
     return 9999;
 }
 
+// Gold to buy an item in a city: twice the production it still needs. The item
+// the city is building counts what has gone into it already, so buying it
+// finishes that work instead of throwing it away.
+function buyCost(city, itemKey) {
+    const done = city.productionQueue[0] === itemKey ? city.productionProgress : 0;
+    return Math.max(0, getItemCost(itemKey) - done) * 2;
+}
+
 // Where a new unit can stand: the city tile, else the first free neighbour,
 // or null when there is none. A tile is free for it when its own slot (unit or
 // civilian) is empty and no other civ's unit, civilian or city is there: a new
@@ -565,10 +573,17 @@ class Game {
         }
         if (UNIT_DEFS[itemKey] && !unitSpawnTile(this, city, itemKey))
             return [false, `No room around ${city.name} for a new ${UNIT_DEFS[itemKey].name}.`];
-        const goldCost = getItemCost(itemKey) * 2;
+        const goldCost = buyCost(city, itemKey);
         if (civ.gold < goldCost) return [false, `Need ${goldCost}g (have ${civ.gold}g).`];
         civ.gold -= goldCost;
         const msg = _completeItem(city, civ, this, itemKey);
+        // The item being built was paid for, its progress with it: a building
+        // leaves the queue (it cannot be built twice), a unit starts its next
+        // copy from nothing.
+        if (city.productionQueue[0] === itemKey) {
+            city.productionProgress = 0;
+            if (BUILDING_DEFS[itemKey]) city.productionQueue.shift();
+        }
         return [true, msg ?? ''];
     }
 
@@ -1000,5 +1015,5 @@ class Game {
 
 if (typeof module !== 'undefined' && module.exports) module.exports = { Game, computeCityYields, processProduction,
      availableTechs, canResearch, computeScore, calcDamage,
-     effectiveStrength, cityCombatStrength, meleeAttack, rangedAttack, bombardCity, getItemCost,
+     effectiveStrength, cityCombatStrength, meleeAttack, rangedAttack, bombardCity, getItemCost, buyCost,
       CITY_NAMES, PLAYER_NAMES, PLAYER_COLORS, DIFFICULTY_DEFS, MAP_COLS, MAP_ROWS };

@@ -10,6 +10,7 @@ const path = require("path");
 const express = require("express");
 const log = require("./log");
 const sessionMiddleware = require("./auth/session");
+const { requireSameOrigin } = require("./auth/origin");
 const authRoutes = require("./auth/routes");
 const gameRoutes = require("./game/routes");
 const leaderboardRoutes = require("./game/leaderboard");
@@ -70,6 +71,9 @@ function createServer() {
   // --- API: JSON body parsing, sessions, routers ---
   app.use(sessionMiddleware);
   app.use("/api", requestLog);
+  // Before anything acts on a request: nothing another site's page sends
+  // with the user's cookie gets through (src/auth/origin.js).
+  app.use("/api", requireSameOrigin);
   app.use(express.json());
   // Routers are mounted through here so the request log can name the route
   // even after an error has left its router (Express resets req.baseUrl on

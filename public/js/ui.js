@@ -66,6 +66,12 @@ let deadline = null;   // ms since the epoch when the current human turn expires
 let formerSeat = null; // our seat before the AI took it over, or null
 let renderer = null;
 let pending  = false;  // an action is awaiting the server's answer
+// End Turn is held for a moment when a turn of ours begins. With only AI seats
+// in between, the next turn is ours again before a double-click's second click
+// or a held Enter's repeat arrives, and would end that turn too.
+const END_TURN_LOCK_MS = 1000;
+let endTurnLockedUntil = 0;
+let myTurnSeen = null;  // the round whose turn of ours started the lock
 let _victoryShown = false;
 let techPromptTurn = null; // the round whose start the tech tree was offered at
 
@@ -145,6 +151,7 @@ const ACK_TIMEOUT_MS = 30000;
 // through or not.
 function send(action) {
     if (!isMyTurn() || pending) return;
+    if (action.type === 'endTurn' && Date.now() < endTurnLockedUntil) return;
     pending = true;
     updateEndTurnButton();
     socket.timeout(ACK_TIMEOUT_MS).emit('game:action', { gameId: GAME_ID, seq, ...action }, (err, res) => {
@@ -181,10 +188,17 @@ function applyState(state) {
         renderer.onClick = handleClick;
         renderer.onHover = handleHover;
         renderer.loadTiles(game.tiles);
+        centerOnHome();
     } else {
         renderer.tiles = game.tiles;
     }
     renderer.knownTechs = viewCiv().techsResearched;
+
+    if (isMyTurn() && myTurnSeen !== game.turn) {
+        myTurnSeen = game.turn;
+        endTurnLockedUntil = Date.now() + END_TURN_LOCK_MS;
+        setTimeout(updateEndTurnButton, END_TURN_LOCK_MS + 20);
+    }
 
     reselect();
     const civ = myCiv();
@@ -198,6 +212,14 @@ function applyState(state) {
     if (game.winner !== null) { closeTechTree(); showVictoryScreen(game.winner); return; }
     if (isMyTurn()) maybeOpenTechTree();
     else closeTechTree();
+}
+
+// Our capital in the middle of the map, else another city or a unit of ours;
+// a spectator gets the civ to move. A civ with nothing left keeps the whole map.
+function centerOnHome() {
+    const civ = viewCiv();
+    const spot = civ.cities.find(c => c === civ.originalCapital) ?? civ.cities[0] ?? civ.units[0];
+    if (spot) renderer.centerOn(spot.q, spot.r);
 }
 
 // Keep the selection across snapshots when it still makes sense: our unit
@@ -691,8 +713,12 @@ function announceTurn() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) document.title = BASE_TITLE; });
 
-document.getElementById('leave-btn').addEventListener('click', () => {
-    if (!confirm('Hand your seat to the AI for the rest of the game? This cannot be undone.')) return;
+document.getElementById('leave-btn').addEventListener('click', (e) => {
+    const sure = confirm('Hand your seat to the AI for the rest of the game? This cannot be undone.');
+    // The dialog hands focus back to Leave; a later Enter meant for End Turn
+    // must not land on it.
+    e.currentTarget.blur();
+    if (!sure) return;
     socket.emit('game:leave', { gameId: GAME_ID }, (res) => {
         if (!res || !res.ok) showMessage(ERROR_TEXT[res && res.error] || 'Could not leave.');
     });
@@ -701,7 +727,7 @@ document.getElementById('leave-btn').addEventListener('click', () => {
 function updateEndTurnButton() {
     const btn = document.getElementById('end-turn-btn');
     const mine = isMyTurn();
-    btn.disabled = !mine || pending;
+    btn.disabled = !mine || pending || Date.now() < endTurnLockedUntil;
     btn.textContent = mine ? (pending ? 'Sending…' : 'End Turn ▶') : 'Waiting…';
 }
 
@@ -884,7 +910,7 @@ function renderProductionList(city, civ) {
     for (const item of buildable) {
         const el = document.createElement('div');
         el.className = 'prod-item' + (city.productionQueue[0] === item.key ? ' active' : '');
-        const goldCost = item.cost * 2;
+        const goldCost = buyCost(city, item.key); // what the server will charge
         const canAfford = civ.gold >= goldCost;
         el.innerHTML = `<span>${item.name}</span><span class="cost">${item.cost}⚙</span>`
             + `<button class="buy-btn" ${canAfford && mine ? '' : 'disabled'} title="Purchase for ${goldCost} gold">${goldCost}g</button>`;
@@ -1069,6 +1095,8 @@ function clearMessages() {
 
 document.getElementById('end-turn-btn').addEventListener('click', () => send({ type: 'endTurn' }));
 
+document.getElementById('center-btn').addEventListener('click', () => { if (game) centerOnHome(); });
+
 document.getElementById('stats-btn').addEventListener('click', () => {
     const so = document.getElementById('stats-overlay');
     if (so.classList.contains('hidden')) openStats();
@@ -1087,6 +1115,14 @@ window.addEventListener('resize', () => {
     if (renderer) renderer.draw();
 });
 
+// A button clicked with the mouse gives up its focus, so a later Enter (End
+// Turn) never presses it by accident. A button pressed from the keyboard
+// (detail 0) keeps focus where the player put it.
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest && e.target.closest('button');
+    if (btn && e.detail > 0) btn.blur();
+});
+
 document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
     // Ctrl+F, Cmd+P and the like belong to the browser, not to the game.
@@ -1100,7 +1136,11 @@ document.addEventListener('keydown', e => {
 
     switch (key) {
         case 'Enter':
-            send({ type: 'endTurn' });
+            if (!e.repeat) send({ type: 'endTurn' }); // a held key ends one turn
+            break;
+
+        case 'c': case 'C':
+            centerOnHome();
             break;
 
         case 'Escape':

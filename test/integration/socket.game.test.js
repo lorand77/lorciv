@@ -52,6 +52,9 @@ test("joining gives the full state: seat, seats, sequence number and snapshot", 
   assert.equal(state.seats[0].civ, "Rome");
   assert.equal(state.seats[1].kind, "ai");
   assert.equal(state.snapshot.version, 2);
+  assert.equal("rngState" in state.snapshot.game, false, "no random-number state for players");
+  assert.equal("aiState" in state.snapshot.game, false, "nor the AI's memory");
+  assert.ok(rooms.getRoom(gameId).lastSnapshot.includes('"rngState"'), "the server keeps both");
   const game = deserializeGame(state.snapshot);
   assert.equal(game.turn, 1);
   assert.equal(game.civs[0].isCpu, false);
@@ -84,7 +87,10 @@ test("a legal action is applied, persisted and broadcast; an illegal one is refu
 
   const row = queries.getGameById.get(gameId);
   assert.equal(row.seq, 1);
-  assert.deepEqual(JSON.parse(row.snapshot), s1.snapshot, "the database holds what was broadcast");
+  // The database holds what was broadcast, and the two fields players never get.
+  const { rngState, aiState, ...storedGame } = JSON.parse(row.snapshot).game;
+  assert.ok(Number.isInteger(rngState) && aiState && typeof aiState === "object");
+  assert.deepEqual({ ...JSON.parse(row.snapshot), game: storedGame }, s1.snapshot, "the database holds what was broadcast");
   const actions = queries.listActions.all(gameId);
   assert.equal(actions.length, 1);
   assert.deepEqual(JSON.parse(actions[0].action), { type: "move", unitId: settler.id, q, r });

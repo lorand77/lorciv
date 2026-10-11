@@ -486,8 +486,21 @@ function viewFor(room, userId) {
     seats: room.seats.map(seatView),
     mySeat: userId == null ? null : seatOf(room, userId),
     formerSeat: userId == null ? null : formerSeatOf(room, userId),
-    snapshot: JSON.parse(room.lastSnapshot),
+    snapshot: clientSnapshot(room.lastSnapshot),
   };
+}
+
+// The snapshot as a browser gets it: everything but the random-number state
+// and the AI's memory. The engine is deterministic, so with those a player
+// could run the AI ahead to see its next moves, or learn which unit or
+// building a bankruptcy will take. The browser's Game is for previews and
+// never draws a random number or runs the AI; deserializeGame does without
+// both. Replays, which need them, open only once a game is over.
+function clientSnapshot(json) {
+  const snap = JSON.parse(json);
+  delete snap.game.rngState;
+  delete snap.game.aiState;
+  return snap;
 }
 
 // The games row and seats as the REST API shows them (no snapshot). Works for

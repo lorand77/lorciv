@@ -82,6 +82,18 @@ docs/          CLAUDE.md design.md plan.md setup.md
   Separate logins on the same account remain connected.
 - Cookie: `httpOnly`, `sameSite: lax`, `secure: "auto"` behind `trust proxy`
   (Caddy terminates TLS), 7 days. Sessions are rows in SQLite.
+- **Same origin only** (`src/auth/origin.js`). `lax` keeps other sites out but
+  not other hosts of this one: `lorchess.lorand77.dev` is the same site to a
+  browser, so a script there would have the cookie sent with a socket it
+  opens to LorCiv, or with a form it posts. WebSockets and body-less posts are
+  outside CORS, so the server checks: when a request carries an `Origin`
+  (every WebSocket handshake and every POST from a browser does, and a page
+  cannot set it), its host must be the `Host` the request was sent to.
+  Socket.IO's `allowRequest` applies it to every handshake; on `/api` it
+  applies to everything but GET, HEAD and OPTIONS, before any route runs (403).
+  No Origin passes (curl, the tests); `null` does not. Comparing with `Host`
+  needs no configured URL: it holds on localhost and behind Caddy, which
+  passes `Host` through.
 - Usernames that differ only in case are one name: registration refuses the
   second, and a `COLLATE NOCASE` unique index backs that check where the
   database allows it (an old database with such pairs boots with a warning).
@@ -193,7 +205,9 @@ Events:
   `{ error: "Server error." }`, never the stack.
 - **Auth** (the only lines with `ip`): `auth.register`, `auth.login`,
   `auth.login_failed`, `auth.throttled` (`warn`, with `kind=login|register`);
-  without `ip`: `auth.busy` (`warn`, the argon2 cap), `auth.logout`, and
+  without `ip`: `auth.busy` (`warn`, the argon2 cap), `auth.origin_refused`
+  (`warn`, `via=http|socket`, `origin`, and for http `method` and `path`: a
+  request from another host's page), `auth.logout`, and
   `auth.register_error`, `auth.login_error`, `auth.logout_error` (`error`,
   an exception). `auth.login_failed` has `reason=wrong_password`,
   `unknown_user` or `deactivated`, and `user`/`name` from the account's own
@@ -399,6 +413,13 @@ crosses the wire.
   but a settler keeps the game open. Without that, in an all-human game the
   first civ to found held every original capital there was and won on turn 2.
   A civ with neither city nor settler can never found and does not count.
+- **Buying counts the work done.** `buyCost(city, key)` is twice the
+  production still needed: the item at the head of the queue counts its
+  progress, anything else costs twice its full cost. Buying the head item
+  spends that progress; a building then leaves the queue and a unit's next
+  copy starts from zero. The original charged full price and left a bought
+  building in the queue, where its production was wasted. The game page's buy
+  buttons show `buyCost`, so they agree with the server.
 
 ### Engine API
 
@@ -571,8 +592,13 @@ turn or seat.
   Only the fields an action can carry are stored: `type`, `unitId`, `cityId`,
   `q`, `r`, `key`.
 - **Per-seat views.** `viewFor(room, seat)` is called once per socket on every
-  broadcast and returns the whole snapshot. If fog of war ever comes, it is
-  the one place to filter.
+  broadcast and returns the snapshot without `rngState` and `aiState`
+  (`clientSnapshot`): the engine is deterministic, so with them a player
+  could run the AI ahead or know what a bankruptcy will take. The browser's
+  Game is for previews and needs neither; the database keeps the full
+  snapshot, and replays get everything once the game is over. The seed stays,
+  since the map is rebuilt from it. If fog of war ever comes, this is the one
+  place to filter.
 - **Victory.** `game.winner` set: status `finished`, `winner_seat` and
   `finished_at` on the row, `game.over` in the log; further actions answer
   `game_over`.
@@ -620,7 +646,15 @@ ack would be dropped and leave the page locked.
 - **Keys:** the original's shortcuts (Enter ends the turn, F founds, M/A/P
   start an improvement, K/H/U, S and T for the overlays, arrows pan), ignored
   while typing, with Ctrl, Cmd or Alt held, and for Enter on a focused button
-  or link, which presses that instead.
+  or link, which presses that instead; C centres the map. A held Enter ends
+  one turn, not one per repeat, and End Turn is held for a second when a turn
+  of ours begins: with only AI seats in between, the next turn is ours again
+  before a double-click's second click lands. A button clicked with the mouse
+  gives up its focus (Leave always does, after its confirmation), so a later
+  Enter never presses it by accident.
+- **The map** opens centred on our capital (else another city or unit of
+  ours; a spectator's on the civ to move), and the Centre button or C brings
+  it back. Pan and zoom always keep part of the map on screen.
 - **Connection:** the socket reconnects on its own; every `connect` re-sends
   `game:join`, so a reload or a server restart lands on the current state. A
   refused handshake (`unauthorized`) sends the page to login. A disconnect the

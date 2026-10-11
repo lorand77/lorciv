@@ -9,6 +9,7 @@
 const { Server } = require("socket.io");
 const log = require("../log");
 const sessionMiddleware = require("../auth/session");
+const { allowSocketRequest } = require("../auth/origin");
 const queries = require("../db/queries");
 const config = require("../config");
 const rooms = require("./rooms");
@@ -45,7 +46,9 @@ function reloadSocketSession(socket, done) {
 }
 
 function attachSockets(httpServer) {
-  const io = new Server(httpServer);
+  // A page on another host of the same site must not open a socket with the
+  // user's cookie (src/auth/origin.js).
+  const io = new Server(httpServer, { allowRequest: allowSocketRequest });
 
   // `npm run user:deactivate` runs in another process and cannot reach these
   // sockets. An idle one never sends the event that would re-check it, so

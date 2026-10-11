@@ -121,14 +121,59 @@ class HexRenderer {
     _screenToWorld(sx, sy) {
         return [(sx - this.offsetX) / this.scale, (sy - this.offsetY) / this.scale];
     }
+    // The map's extent in world pixels, worked out again only when the tile
+    // map is replaced by one of another size.
+    _mapBounds() {
+        if (this._boundsKey !== this.tiles.size) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const t of this.tiles.values()) {
+                const [x, y] = hexToPixel(t.q, t.r, HEX_SIZE);
+                minX = Math.min(minX, x - HEX_SIZE); maxX = Math.max(maxX, x + HEX_SIZE);
+                minY = Math.min(minY, y - HEX_SIZE); maxY = Math.max(maxY, y + HEX_SIZE);
+            }
+            this._bounds = this.tiles.size ? { minX, minY, maxX, maxY } : null;
+            this._boundsKey = this.tiles.size;
+        }
+        return this._bounds;
+    }
+
+    // The whole map in the middle of the canvas.
     _centerView() {
-        this.offsetX = this.canvas.clientWidth  / 2;
-        this.offsetY = this.canvas.clientHeight / 2;
+        const b = this._mapBounds();
+        if (!b) {
+            this.offsetX = this.canvas.clientWidth  / 2;
+            this.offsetY = this.canvas.clientHeight / 2;
+            return;
+        }
+        this.offsetX = this.canvas.clientWidth  / 2 - (b.minX + b.maxX) / 2 * this.scale;
+        this.offsetY = this.canvas.clientHeight / 2 - (b.minY + b.maxY) / 2 * this.scale;
+    }
+
+    // Put hex (q, r) in the middle of the canvas.
+    centerOn(q, r) {
+        const [x, y] = hexToPixel(q, r, HEX_SIZE);
+        this.offsetX = this.canvas.clientWidth  / 2 - x * this.scale;
+        this.offsetY = this.canvas.clientHeight / 2 - y * this.scale;
+        this.draw();
+    }
+
+    // Keep part of the map on screen whatever the pan and zoom: at least a
+    // margin's worth of it overlaps the canvas on each axis, so the map can
+    // never be dragged out of sight.
+    _clampView() {
+        const b = this._mapBounds();
+        if (!b) return;
+        const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
+        const mx = Math.min(150, W / 3), my = Math.min(150, H / 3);
+        const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+        this.offsetX = clamp(this.offsetX, mx - b.maxX * this.scale, W - mx - b.minX * this.scale);
+        this.offsetY = clamp(this.offsetY, my - b.maxY * this.scale, H - my - b.minY * this.scale);
     }
 
     // ---- Draw ----
 
     draw() {
+        this._clampView();
         const ctx = this.ctx;
         const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
         const dpr = window.devicePixelRatio || 1;

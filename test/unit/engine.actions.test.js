@@ -287,6 +287,36 @@ describe("applyAction", () => {
     assert.equal(humans.winner, 0);
   });
 
+  test("buying what a city is building counts the work already done, and nothing is built twice", () => {
+    const { buyCost, getItemCost } = require("../../src/shared/game");
+    assert.equal(applyAction(g, 0, { type: "foundCity", unitId: unitOf(g, 0, "settler").id }).ok, true);
+    const civ = g.civs[0];
+    const city = civ.cities[0];
+    civ.gold = 500;
+
+    // A building: pay for what is left; it leaves the queue.
+    city.productionQueue = ["monument"];
+    city.productionProgress = getItemCost("monument") - 5;
+    assert.equal(buyCost(city, "monument"), 10);
+    assert.equal(applyAction(g, 0, { type: "buy", cityId: city.id, key: "monument" }).ok, true);
+    assert.equal(civ.gold, 490);
+    assert.ok(city.buildings.includes("monument"));
+    assert.deepEqual(city.productionQueue, [], "not left in the queue to be built again");
+    assert.equal(city.productionProgress, 0);
+
+    // A unit: the same price rule; the next copy starts from nothing.
+    city.productionQueue = ["warrior"];
+    city.productionProgress = 10;
+    const price = (getItemCost("warrior") - 10) * 2;
+    assert.equal(applyAction(g, 0, { type: "buy", cityId: city.id, key: "warrior" }).ok, true);
+    assert.equal(civ.gold, 490 - price);
+    assert.deepEqual(city.productionQueue, ["warrior"]);
+    assert.equal(city.productionProgress, 0);
+
+    // Anything else costs the full price.
+    assert.equal(buyCost(city, "settler"), getItemCost("settler") * 2);
+  });
+
   test("the AI stops the moment the last human civ is eliminated", () => {
     applyAction(g, 0, { type: "endTurn" });
     // Seat 1's turn wipes seat 0 out, as a conquest would.

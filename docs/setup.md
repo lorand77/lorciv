@@ -303,9 +303,17 @@ lorchess.lorand77.dev {
 }
 
 lorciv.lorand77.dev {
+    header Strict-Transport-Security "max-age=31536000"
     reverse_proxy localhost:3001
 }
 ```
+
+The `header` line is HSTS: a browser that has been to the site once goes
+straight to HTTPS for a year, so a hostile network cannot hold a later visit
+on plain HTTP. It covers this host only; adding `includeSubDomains` on the
+parent domain, or `preload`, would commit every `*.lorand77.dev` host to
+HTTPS and is a decision for the whole domain. On a server already running,
+add the line to the existing block and reload Caddy as below.
 
 ```
 sudo systemctl reload caddy

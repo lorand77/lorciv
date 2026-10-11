@@ -98,16 +98,28 @@ docs/          CLAUDE.md design.md plan.md setup.md
   `connect.sid`, which LorChess uses, and localhost shares cookies across
   ports. Logout clears it with the same attributes, without which a browser
   would not overwrite a `__Host-` cookie.
-- **No framing** (`securityHeaders` in `src/app.js`). Every response says
-  `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options:
-  DENY`, so no page of LorCiv can be shown inside another: a sibling host
-  could otherwise frame the lobby or the game and trick a click, which the
-  origin check below cannot catch because the click is a real one. Express's
-  own 404 page swaps the CSP for its stricter `default-src 'none'`; it has
-  nothing to click and keeps `X-Frame-Options`. Responses also carry
-  `X-Content-Type-Options: nosniff`, and `X-Powered-By` is off. There is no
-  fuller CSP yet: the game page's inline `style` attributes would need it to
-  allow inline styles.
+- **Security headers** (`securityHeaders` in `src/app.js`), on every response:
+  - A Content-Security-Policy: `default-src 'self'; script-src 'self';
+    style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self';
+    form-action 'self'; frame-ancestors 'none'`. Everything comes from this
+    origin (the socket too: `'self'` covers `ws:`/`wss:` to the same host).
+    Scripts run only as files, so if a bug ever put someone's text into a page
+    as HTML, an injected `<script>` or `onclick=` would not run: no page may
+    have an inline script, event handler or `javascript:` URL, which
+    `test/integration/headers.test.js` checks. Inline styles are allowed
+    because the game and replay pages still use `style=""` attributes (in the
+    HTML and in the scoreboard rows `ui.js` and `replay-page.js` build as
+    strings); once those move into `game.css` or onto `el.style`, which CSP
+    does not restrict, `'unsafe-inline'` can go.
+  - No framing: `frame-ancestors 'none'`, and `X-Frame-Options: DENY` for older
+    browsers. A sibling host could otherwise frame the lobby or the game and
+    trick a click, which the origin check below cannot catch because the click
+    is a real one. Express's own 404 page swaps the CSP for its stricter
+    `default-src 'none'`; it has nothing to click and keeps
+    `X-Frame-Options`.
+  - `X-Content-Type-Options: nosniff`; `X-Powered-By` is off.
+  - HSTS is Caddy's, not the app's: it means something only on HTTPS, which
+    Caddy terminates (`docs/setup.md`, the Caddyfile).
 - **Same origin only** (`src/auth/origin.js`). `lax` keeps other sites out but
   not other hosts of this one: `lorchess.lorand77.dev` is the same site to a
   browser, so a script there would have the cookie sent with a socket it

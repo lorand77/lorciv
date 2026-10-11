@@ -83,6 +83,9 @@ under `src/game/` or `src/shared/`.
 - Test files must `require("../helpers/server")` before anything that loads
   `src/db/index.js` (pure modules such as `src/shared/*` are fine without it);
   the database path is fixed when `src/db/index.js` loads.
+- The CSP (`src/app.js`) runs scripts only from files on this origin: no
+  inline `<script>`, `onclick=` or `javascript:` URL in a page, and nothing
+  loaded from another host. A test scans `public/*.html` for them.
 - `src/shared/*.js` runs in two runtimes: keep the UMD tail at the bottom and
   use no Node-only or DOM-only APIs.
 - Catalogues (difficulties, turn-time presets, action names) are allowlists in

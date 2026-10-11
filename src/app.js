@@ -51,16 +51,32 @@ function requestLog(req, res, next) {
   next();
 }
 
-// Sent with every response. No page of LorCiv may be shown inside another
-// page: a sibling *.lorand77.dev host is the same site to the browser, so a
-// page there could frame the lobby or the game and trick a click (joining,
-// leaving, ending a turn) that the origin check cannot tell from a real one,
-// because it is one. frame-ancestors is the current form; X-Frame-Options is
-// for older browsers. nosniff keeps a browser from running a response as a
-// type other than the one sent.
+// The Content-Security-Policy every response carries (see "Security headers"
+// in docs/design.md). Everything comes from this origin: scripts only as
+// files, so an injected <script> or onclick= never runs; styles may also be
+// inline, because the game and replay pages still use style="" attributes
+// (moving them into game.css would allow dropping 'unsafe-inline'). No
+// plugins, no <base> elsewhere, forms post here only, and no framing.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+// Sent with every response. The CSP above, whose frame-ancestors keeps any
+// page of LorCiv from being shown inside another: a sibling *.lorand77.dev
+// host is the same site to the browser, so a page there could frame the lobby
+// or the game and trick a click (joining, leaving, ending a turn) that the
+// origin check cannot tell from a real one, because it is one.
+// X-Frame-Options says the same to older browsers. nosniff keeps a browser
+// from running a response as a type other than the one sent.
 function securityHeaders(req, res, next) {
   res.set({
-    "Content-Security-Policy": "frame-ancestors 'none'",
+    "Content-Security-Policy": CSP,
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
   });

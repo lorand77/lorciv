@@ -14,14 +14,15 @@ the database layer, the page shell) were copied from there and are now its own.
 
 ## Where things stand
 
-Milestones M0 to M3 of the plan are done: accounts and sessions work; the
-engine lives in `src/shared/`; the server runs games in rooms, persisted after
-every action and rebuilt at boot; tables in the lobby seat up to four people
-with AI in the other seats; turn timers end an absent player's turn and hand
-the seat to the AI after too many misses; the game page plays through the
-server with chat and survives a reload and a server restart. **Not yet:**
-production deployment (M4), and the polish of M5. The sections below describe
-what exists. The last section lists what has been decided but not built.
+Milestones M0 to M4 of the plan are done and the site is live at
+`lorciv.lorand77.dev`: accounts and sessions work; the engine lives in
+`src/shared/`; the server runs games in rooms, persisted after every action and
+rebuilt at boot; tables in the lobby seat up to four people with AI in the
+other seats; turn timers end an absent player's turn and hand the seat to the
+AI after too many misses; the game page plays through the server with chat and
+survives a reload and a server restart. Of the polish (M5), account deletion,
+the leaderboard and replays exist. The sections below describe what exists.
+The last section lists what is still ahead.
 
 ## Tech stack
 
@@ -42,17 +43,21 @@ src/
                throttle, usernamePolicy
   db/          index.js (open, schema, migrations), schema.sql, queries.js,
                retention.js (the chat sweep), reset.js and the user CLI
-               scripts (setPassword, deactivate)
+               scripts (setPassword, deactivate, deleteUser)
   game/        rooms.js (live games: engine, seats, persistence), socket.js
-               (every Socket.IO event), routes.js (/api/games)
+               (every Socket.IO event), routes.js (/api/games),
+               leaderboard.js (/api/leaderboard)
   shared/      the engine, served at /js/ ahead of public/ (see "The engine")
-               hex.js state.js mapgen.js game.js ai.js snapshot.js settings.js actions.js
+               hex.js state.js mapgen.js game.js ai.js snapshot.js settings.js
+               actions.js replay.js
 public/
-  index.html login.html lobby.html game.html terms.html privacy.html
-  css/         styles.css (every page but the game), game.css (the game page)
+  index.html login.html lobby.html game.html replay.html leaderboard.html
+  terms.html privacy.html
+  css/         styles.css (every page but the game), game.css (game and replay)
   assets/      terrain and resource PNGs
-  js/          login.js net.js authGuard.js shell.js lobby.js
+  js/          login.js net.js authGuard.js shell.js lobby.js leaderboard.js
                renderer.js (the canvas map) ui.js (the game page)
+               replay-page.js (the replay page)
 tools/         simulate.js — N AI-only games, by hand
 test/          unit/, integration/, helpers/ (server.js, logs.js)
 docs/          CLAUDE.md design.md plan.md setup.md
@@ -101,8 +106,21 @@ docs/          CLAUDE.md design.md plan.md setup.md
   password); `requireAuth` and the socket session check refuse it too, because
   a login racing the command can create a session after the command deleted
   them. The command runs in its own process and cannot reach live sockets, so
-  the server sweeps them every `DEACTIVATION_SWEEP_MS`. Account deletion is
-  not built yet (plan, M4): it needs to know which game rows to keep.
+  the server sweeps them every `DEACTIVATION_SWEEP_MS`. A seat the person
+  holds in a live game is left to the turn clock, like any absent player's.
+- **Deletion** (`npm run user:delete`, `src/db/deleteUser.js`) is built on
+  deactivation. The `users` row cannot go, because seats and action rows point
+  at it and the games are the other players' record too. So it stays, renamed
+  `deleted-<id>` (a name registration can never produce), without a password,
+  and deactivated. What is only the person's is deleted in one transaction: the
+  chat they wrote and their sessions; tables they host are cancelled and seats
+  they hold at other tables released. A human seat in a live game refuses the
+  deletion: deactivate first, let the clock hand the seat over, then delete (a
+  game with no clock never will; its other players can leave it). The command
+  shows counts, wants the username typed back, turns on `secure_delete` and
+  checkpoints the WAL afterwards, so the content does not linger in the file.
+  It runs in its own process, so the lobby pages of others learn of a cancelled
+  table on their next refresh.
 - **Throttling** (`src/auth/throttle.js`): argon2 is expensive on purpose, so
   register and login are limited. Per client IP, failed logins (unknown users
   included) and registrations that reach the hash are counted over a sliding
@@ -277,14 +295,16 @@ these changes, update the page and its date in the same commit: what is
 stored (the account, the session, the games a player takes part in with every
 action and the result, visible to every signed-in player since spectating is
 open, and in-game chat, seen by everyone in the game and deleted
-`CHAT_RETENTION_DAYS` after it ends); sessions last 7 days
+`CHAT_RETENTION_DAYS` after it ends); what deletion removes and keeps (see
+Authentication); sessions last 7 days
 (`src/auth/session.js`); IPs live in the throttle's memory for
 `AUTH_WINDOW_MS` (15 min) and are written only on the `auth.*` log lines;
 what the logs hold and their 14-day lifetime (log rotation, `docs/setup.md`);
 nothing is visible when signed out; there is no analytics. The page also
 promises nightly backups to Backblaze B2 kept for at most 90 days, which M4
 sets up; check it again then. The contact address is `lorciv@lorand77.dev`.
-The page describes the game as it is after M3; M4 sets up the backups it promises.
+The page describes the game as it is; the backups it promises run nightly on
+the server (`scripts/backup.sh`, `docs/setup.md`).
 
 ## The engine: `src/shared/`
 
@@ -306,6 +326,7 @@ and made the changes a server needs.
 | `snapshot.js` | `serializeGame`, `deserializeGame`, format version 2 | from the old save code, extended |
 | `settings.js` | the allowlists: difficulties, turn times, action names | new |
 | `actions.js` | `applyAction`, the one validator for player actions | new |
+| `replay.js` | `replayAll`: a game's states rebuilt from its seed and action rows | new (M5) |
 
 The canvas renderer that used to share `hex.js` is `public/js/renderer.js`,
 moved as it was except that it loads its images from `/assets/`. The old
@@ -333,7 +354,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = { Game, ..
 ```
 
 Browser load order: `hex`, `state`, `mapgen`, `game`, `snapshot`, `settings`,
-`actions`, then `renderer`. The browser never loads `ai.js`. Nothing in
+`actions`, then `renderer`. The game page never loads `ai.js`; the replay page
+does, because it re-runs the AI (see "Looking back"). Nothing in
 `src/shared/` touches `document`, `window`, `localStorage` or Node-only APIs;
 `test/unit/engine.load.test.js` greps for it. The moved files keep the
 original's single quotes and four-space indent: match the file you are in.
@@ -627,17 +649,45 @@ the title and, if allowed, shows a notification. A seat the AI took over, an
 abandoned game and a table that has not started each have their own status
 line.
 
+## Looking back: leaderboard and replays
+
+**Leaderboard.** `GET /api/leaderboard` (`src/game/leaderboard.js`,
+`queries.leaderboard`): every active account with a seat in a finished game,
+with games played and games won, top 100 by wins, the sort and the cut in SQL.
+A win counts for the person who was still playing the seat at the end; a seat
+the AI took over and then won is the person's game but not their win.
+Deactivated and deleted accounts are left off. `leaderboard.html` renders it
+and marks the viewer's row.
+
+**Replays.** The engine is deterministic and the server recorded every action
+in order, including its own `timeout` and `leave` rows, so a game's states can
+be rebuilt rather than stored. `src/shared/replay.js` does it the way
+`rooms.js` played it: start the engine from the snapshot's `setup` and let the
+AI seats before the first human play; then for each action, a player's action
+clears the seat's pending messages and goes through `applyAction`, a `timeout`
+is an `endTurn` plus a missed turn with the takeover at the limit, a `leave`
+flips the seat to AI; after each, the AI seats up to the next human play and
+victory is checked, unless no human seat is left, in which case the server
+abandoned the game and the replay stops there too. `replayAll(record)` returns
+every state as a snapshot and a one-line label per step, or the first action
+the rules refuse, which would mean the record is corrupt.
+`test/integration/replay.test.js` plays a two-human game with a timeout, a
+takeover and a leave through the server and checks that the replay reproduces
+every stored snapshot exactly: the determinism of the engine, tested on a real
+game. `GET /api/games/:id/replay` returns the setup and the actions (404 for a
+table, which has nothing to replay); `replay.html` (`replay-page.js`) rebuilds
+the states in the browser in slices, so a long game does not freeze the page,
+and shows them on the game's canvas with a slider, step buttons, play at three
+speeds and the arrow keys. It is linked from every started game in the lobby
+and from the victory screen. The replay page loads `ai.js`; the game page does
+not.
+
 ## Decided, not yet built
 
-The plan (`docs/plan.md`) has these left:
-
-- **Hosting (M4):** the LorChess EC2 instance, own user, own port (3001),
-  own database, behind the same Caddy, at `lorciv.lorand77.dev`, with a nightly
-  backup to Backblaze B2 as the privacy policy promises.
-- **Polish (M5):** account deletion (built on deactivation, like LorChess's),
-  a finished-game page with the score graph, replays from the action rows, a
-  leaderboard, broadcasting after each AI civ if the round jump feels wrong,
-  touch and small-screen layout, and deleting `civ_lite-old/` and the
-  `lorchess/` reference copy.
-- Ideas kept for later: fog of war (the per-seat view function is the hook),
-  simultaneous turns, maps sized to the number of players, more civs.
+Left of the plan's polish (M5, `docs/plan.md`): a finished-game summary page
+(the victory screen on the game page serves today), broadcasting after each AI
+civ if the round jump feels wrong, touch and small-screen layout, and deleting
+`civ_lite-old/` and the `lorchess/` reference copy once the game page has been
+checked against the original. Ideas kept for later: fog of war (the per-seat
+view function is the hook), simultaneous turns, maps sized to the number of
+players, more civs.

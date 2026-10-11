@@ -12,6 +12,7 @@
 (function () {
   const ITEMS = [
     { href: "/lobby.html", icon: "⬡", label: "Lobby" },
+    { href: "/leaderboard.html", icon: "🏆", label: "Leaderboard" },
   ];
 
   function el(tag, cls, text) {

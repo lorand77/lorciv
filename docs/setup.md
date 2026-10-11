@@ -367,9 +367,26 @@ deleted: the username stays taken, and reactivating restores the account.
 
 ## deleting a user
 
-Not built yet (plan, M5): deactivate instead. When it comes it will follow
-LorChess's command: the row stays, renamed, so games keep their record; what is
-only the user's is deleted; copies in B2 backups expire with the backups.
+For a deletion request (the privacy policy promises one by email). Same place
+and rules as above. There is no undo:
+
+```
+npm run user:delete -- <username>
+```
+
+It prints what will be kept and deleted and asks you to type the username back.
+The account becomes `deleted-<id>`. It can't log in and appears nowhere; the
+games it took part in stay in the other players' records under that name. Its
+chat and sessions are deleted, tables it hosted are cancelled, seats it held at
+other tables are released, and the old username can be registered again. If
+the user holds a seat in a live game it refuses: deactivate them first, let the
+turn clock hand the seat to the AI, then delete. A game with no clock never
+does that; its other players can leave it. Copies in B2 backups expire with the
+backups.
+
+Before deleting, make sure the request really comes from the account's owner.
+There is no email on file, so ask them to prove it from inside the account, for
+example by sending a chat message you name in one of their games.
 
 ## backing up sqlite database
 

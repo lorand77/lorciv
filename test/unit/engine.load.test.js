@@ -10,7 +10,7 @@ const { describe, test } = require("node:test");
 const assert = require("node:assert/strict");
 
 const SHARED = path.join(__dirname, "../../src/shared");
-const FILES = ["hex.js", "state.js", "mapgen.js", "game.js", "ai.js", "snapshot.js", "settings.js", "actions.js"];
+const FILES = ["hex.js", "state.js", "mapgen.js", "game.js", "ai.js", "snapshot.js", "settings.js", "actions.js", "replay.js"];
 
 describe("src/shared", () => {
   test("every file loads in Node and exports what the others need", () => {
@@ -32,6 +32,8 @@ describe("src/shared", () => {
     assert.ok(Array.isArray(settings.ACTION_TYPES));
     const actions = require(path.join(SHARED, "actions.js"));
     assert.equal(typeof actions.applyAction, "function");
+    const replay = require(path.join(SHARED, "replay.js"));
+    assert.equal(typeof replay.replayAll, "function");
   });
 
   test("the directory holds exactly the engine files", () => {

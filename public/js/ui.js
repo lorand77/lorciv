@@ -317,6 +317,9 @@ function _drawVictoryGraph() {
 document.getElementById('victory-lobby').addEventListener('click', () => {
     location.href = '/lobby.html';
 });
+document.getElementById('victory-replay').addEventListener('click', () => {
+    location.href = '/replay.html?id=' + GAME_ID;
+});
 
 // ============================================================
 // Stats window

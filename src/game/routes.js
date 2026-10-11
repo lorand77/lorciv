@@ -97,6 +97,20 @@ router.get("/:id", (req, res) => {
   return res.json(withMine(row, req.session.userId));
 });
 
+// Everything the replay page needs to rebuild a game: the setup the engine
+// started from (kept in every snapshot) and the recorded actions. Tables have
+// no snapshot and nothing to replay.
+router.get("/:id/replay", (req, res) => {
+  const id = Number(req.params.id);
+  const row = Number.isInteger(id) ? queries.getGameById.get(id) : null;
+  if (!row || !row.snapshot) return refuse(res, "no_such_game");
+  return res.json({
+    ...withMine(row, req.session.userId),
+    setup: JSON.parse(row.snapshot).setup,
+    actions: queries.listActions.all(id).map((a) => ({ seq: a.seq, seat: a.seat, action: JSON.parse(a.action), at: a.created_at })),
+  });
+});
+
 function seatParams(req) {
   const id = Number(req.params.id);
   const seat = Number(req.params.seat);

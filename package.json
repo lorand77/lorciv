@@ -9,11 +9,12 @@
     "dev": "node --watch --env-file-if-exists=.env src/server.js",
     "test": "node --test \"test/**/*.test.js\"",
     "test:watch": "node --test --watch \"test/**/*.test.js\"",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=\"test/**\" \"test/**/*.test.js\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-exclude=\"test/**\" --test-coverage-lines=98 --test-coverage-branches=91 --test-coverage-functions=96 \"test/**/*.test.js\"",
     "db:reset": "node --env-file-if-exists=.env src/db/reset.js",
     "user:password": "node --env-file-if-exists=.env src/db/setPassword.js",
     "user:deactivate": "node --env-file-if-exists=.env src/db/deactivate.js deactivate",
-    "user:reactivate": "node --env-file-if-exists=.env src/db/deactivate.js reactivate"
+    "user:reactivate": "node --env-file-if-exists=.env src/db/deactivate.js reactivate",
+    "user:delete": "node --env-file-if-exists=.env src/db/deleteUser.js"
   },
   "dependencies": {
     "argon2": "0.44.0",

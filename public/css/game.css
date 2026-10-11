@@ -331,3 +331,11 @@ button.danger {
 .btn-row button { flex: 1; }
 #status-line .countdown { color: #e8d48b; font-variant-numeric: tabular-nums; margin-left: 6px; }
 #status-line .countdown.low { color: #ff6464; }
+
+/* ---- Replay page ---- */
+#replay-controls input[type="range"] { width: 100%; margin: 4px 0; }
+#step-label { font-size: 11px; margin-bottom: 6px; min-height: 14px; }
+#replay-controls .btn-row button { padding: 5px 4px; }
+#replay-controls select { background: #1e2d40; color: #ccc; border: 1px solid #2e4060; border-radius: 3px; font-size: 12px; }
+.button-link { display: block; text-align: center; padding: 7px; border-radius: 4px; background: #1e2d40; border: 1px solid #2e4060; color: #ccc; text-decoration: none; font-size: 12px; }
+.button-link:hover { background: #2a3f5a; color: #fff; }

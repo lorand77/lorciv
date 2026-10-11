@@ -12,6 +12,7 @@ const log = require("./log");
 const sessionMiddleware = require("./auth/session");
 const authRoutes = require("./auth/routes");
 const gameRoutes = require("./game/routes");
+const leaderboardRoutes = require("./game/leaderboard");
 const { attachSockets } = require("./game/socket");
 const rooms = require("./game/rooms");
 
@@ -77,6 +78,7 @@ function createServer() {
     app.use(mount, (req, res, next) => { req.mount = mount; next(); }, router);
   api("/api", authRoutes);
   api("/api/games", gameRoutes);
+  api("/api/leaderboard", leaderboardRoutes);
 
   // --- Static assets ---
   // One copy of the game engine, in src/shared, served at /js/*. Mounted before

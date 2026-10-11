@@ -29,6 +29,56 @@ module.exports = {
   ),
   updatePassword: db.prepare("UPDATE users SET password_hash = ? WHERE id = ?"),
 
+  // --- account deletion (src/db/deleteUser.js) ---
+  // Human seats the user holds in games that are still going: deletion waits
+  // for these (deactivate first; the turn clock hands them to the AI).
+  liveSeatsOf: db.prepare(`
+    SELECT g.id, g.status, s.seat FROM game_seats s JOIN games g ON g.id = s.game_id
+    WHERE s.user_id = @id AND s.kind = 'human' AND g.status = 'active'
+  `),
+  // Tables the user is at: hosted ones are cancelled, other seats released.
+  tablesHostedBy: db.prepare("SELECT id FROM games WHERE host_id = @id AND status = 'lobby'"),
+  releaseTableSeatsOf: db.prepare(`
+    UPDATE game_seats SET kind = 'open', user_id = NULL, joined_at = NULL
+    WHERE user_id = @id AND game_id IN (SELECT id FROM games WHERE status = 'lobby')
+  `),
+  deletionSummary: db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM game_seats s JOIN games g ON g.id = s.game_id
+        WHERE s.user_id = @id AND g.status IN ('finished', 'aborted')) AS games,
+      (SELECT COUNT(*) FROM games WHERE host_id = @id AND status = 'lobby') AS tables,
+      (SELECT COUNT(*) FROM game_seats s JOIN games g ON g.id = s.game_id
+        WHERE s.user_id = @id AND g.status = 'lobby' AND g.host_id != @id) AS tableSeats,
+      (SELECT COUNT(*) FROM chat_messages WHERE user_id = @id) AS chat
+  `),
+  deleteChatOf: db.prepare("DELETE FROM chat_messages WHERE user_id = @id"),
+  // The row itself stays, because seats and action rows point at it and are
+  // the other players' record too. Registration allows only [A-Za-z0-9_], so
+  // nobody can ever register a `deleted-<id>` name.
+  scrubDeletedUser: db.prepare(`
+    UPDATE users
+       SET username = 'deleted-' || id, password_hash = NULL,
+           deactivated_at = COALESCE(deactivated_at, datetime('now'))
+     WHERE id = @id
+  `),
+
+  // --- leaderboard (src/game/leaderboard.js) ---
+  // Every active account with a seat in a finished game: games played, and
+  // games won while still playing the seat (a seat the AI took over and then
+  // won is not the person's win). Top 100 by wins.
+  leaderboard: db.prepare(`
+    SELECT u.id, u.username,
+           COUNT(*) AS games,
+           SUM(CASE WHEN g.winner_seat = s.seat AND s.kind = 'human' THEN 1 ELSE 0 END) AS wins
+    FROM users u
+    JOIN game_seats s ON s.user_id = u.id
+    JOIN games g ON g.id = s.game_id AND g.status = 'finished'
+    WHERE u.deactivated_at IS NULL
+    GROUP BY u.id
+    ORDER BY wins DESC, games ASC, u.username COLLATE NOCASE ASC
+    LIMIT 100
+  `),
+
   // --- games (src/game/rooms.js, src/game/routes.js) ---
   // A game starts life as a table in the lobby; startGame makes it active.
   createTable: db.prepare("INSERT INTO games (status, host_id, seed, settings) VALUES ('lobby', ?, ?, ?)"),

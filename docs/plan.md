@@ -321,7 +321,7 @@ describe what now exists.
 - Done when: two people and two AIs play a game over two sessions with a
   restart in between.
 
-### M4 — Production (small)
+### M4 — Production (small) — done 2026-10-11, live at lorciv.lorand77.dev
 
 - On the lorchess EC2 instance: system user `lorciv`, its own `.env` with
   `PORT=3001`, its own pm2 process, a second Caddy site block for
@@ -329,7 +329,7 @@ describe what now exists.
   bucket or prefix, `docs/setup.md` final.
 - Done when: live at the chosen hostname with a nightly backup.
 
-### M5 — Polish (as wanted, in any order)
+### M5 — Polish (as wanted, in any order) — account deletion, leaderboard and replays done 2026-10-11
 
 - Finished-game page with the score graph; replay from `game_actions`.
 - Profile and settings pages (copied).

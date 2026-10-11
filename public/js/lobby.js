@@ -178,9 +178,13 @@
     row.appendChild(main);
     if (g.status === "lobby") row.appendChild(tableControls(g));
     else if (link) {
+      const links = el("span", "controls");
       const open = el("a", "button-link", g.status === "active" ? (g.mySeat !== null ? "Play" : "Watch") : "View");
       open.href = "/game.html?id=" + g.id;
-      row.appendChild(open);
+      const replay = el("a", "button-link", "Replay");
+      replay.href = "/replay.html?id=" + g.id;
+      links.append(open, replay);
+      row.appendChild(links);
     }
     return row;
   }

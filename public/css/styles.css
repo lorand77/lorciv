@@ -343,3 +343,10 @@ body.has-shell .app-main > .page { margin: 0 auto; padding: 0 20px; }
 .controls { display: flex; gap: 6px; align-items: center; }
 .controls button { margin: 0; padding: 4px 10px; font-size: 12px; }
 .row.small { padding: 4px 10px; }
+
+/* --- leaderboard --- */
+.lb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.lb-table th, .lb-table td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+.lb-table th { color: var(--text-muted); font-weight: normal; font-size: 12px; }
+.lb-table td.num, .lb-table th:not(:nth-child(2)) { text-align: right; font-variant-numeric: tabular-nums; }
+.lb-table tr.me td { background: var(--inset); font-weight: bold; }

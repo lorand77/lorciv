@@ -2,8 +2,10 @@
 
 // Every response carries the CSP (scripts only from this origin and only as
 // files; inline styles allowed; no framing, since a sibling *.lorand77.dev
-// page could otherwise frame the game and trick a click), says nosniff, and
-// does not name the server software. No page may need an inline script. Outside production the session cookie has a
+// page could otherwise frame the game and trick a click), keeps other origins
+// from holding a handle on its windows or embedding its responses, says
+// nosniff, and does not name the server software. No page may need an inline
+// script. Outside production the session cookie has a
 // plain name of its own, not LorChess's connect.sid.
 
 const { test, before, after } = require("node:test");
@@ -22,6 +24,8 @@ test("pages, scripts and API answers carry the CSP and may not be framed", async
     const res = await fetch(srv.baseUrl + path);
     assert.equal(res.headers.get("content-security-policy"), CSP, path);
     assert.equal(res.headers.get("x-frame-options"), "DENY", path);
+    assert.equal(res.headers.get("cross-origin-opener-policy"), "same-origin", path);
+    assert.equal(res.headers.get("cross-origin-resource-policy"), "same-origin", path);
     assert.equal(res.headers.get("x-content-type-options"), "nosniff", path);
     assert.equal(res.headers.get("x-powered-by"), null, path);
   }

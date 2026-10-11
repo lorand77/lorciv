@@ -73,10 +73,18 @@ const CSP = [
 // or the game and trick a click (joining, leaving, ending a turn) that the
 // origin check cannot tell from a real one, because it is one.
 // X-Frame-Options says the same to older browsers. nosniff keeps a browser
-// from running a response as a type other than the one sent.
+// from running a response as a type other than the one sent. The two
+// Cross-Origin headers treat a sibling host as the stranger it is: COOP gives
+// a page of another origin that opens a LorCiv tab a dead handle, so it cannot
+// later navigate that tab to a fake login; CORP keeps another origin from
+// embedding LorCiv's responses (<img>, <script>), which would pull a signed-in
+// answer into that page's process. "same-origin", not "same-site", which
+// would still let LorChess in.
 function securityHeaders(req, res, next) {
   res.set({
     "Content-Security-Policy": CSP,
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
   });

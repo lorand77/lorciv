@@ -117,6 +117,15 @@ docs/          CLAUDE.md design.md plan.md setup.md
     is a real one. Express's own 404 page swaps the CSP for its stricter
     `default-src 'none'`; it has nothing to click and keeps
     `X-Frame-Options`.
+  - `Cross-Origin-Opener-Policy: same-origin`: a page of another origin (a
+    sibling host included) that opens a LorCiv tab gets a dead handle, so it
+    cannot later navigate the tab to a fake login or probe it. LorCiv opens
+    no popups and has no third-party sign-in, which is what this would break.
+  - `Cross-Origin-Resource-Policy: same-origin`: no other origin may embed
+    LorCiv's responses as `<img>`, `<script>` and the like, which would bring
+    a signed-in answer (the cookie goes along to a sibling's request) into
+    that page's process. `same-site` would still let LorChess in. An image
+    meant to be shown elsewhere would need its own, looser header.
   - `X-Content-Type-Options: nosniff`; `X-Powered-By` is off.
   - HSTS is Caddy's, not the app's: it means something only on HTTPS, which
     Caddy terminates (`docs/setup.md`, the Caddyfile).

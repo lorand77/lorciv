@@ -1,8 +1,9 @@
 "use strict";
 
-// /api/leaderboard: active accounts ranked by wins over finished games and
-// abandoned games two or more people played (a loss each); a seat the AI took
-// over does not win for the person; deactivated accounts are left off.
+// /api/leaderboard: every active account, ranked by wins over finished games
+// and abandoned games two or more people played (a loss each), those yet to
+// play at 0 / 0 below the rest; a seat the AI took over does not win for the
+// person; deactivated accounts are left off.
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -28,6 +29,7 @@ test("ranks by wins, counts games, ignores unfinished ones and AI-held seats", a
   const alice = await registerUser(srv.baseUrl, "alice");
   const bob = await registerUser(srv.baseUrl, "bob");
   const carol = await registerUser(srv.baseUrl, "carol");
+  const dora = await registerUser(srv.baseUrl, "dora"); // never played
   await finishedGame(alice, 0);
   await finishedGame(alice, 0);
   await finishedGame(alice, 2);
@@ -42,11 +44,12 @@ test("ranks by wins, counts games, ignores unfinished ones and AI-held seats", a
 
   const res = await alice.c.get("/api/leaderboard");
   assert.equal(res.status, 200);
-  const rows = res.body.filter((r) => [alice, bob, carol].some((u) => u.user.id === r.id));
+  const rows = res.body.filter((r) => [alice, bob, carol, dora].some((u) => u.user.id === r.id));
   assert.deepEqual(rows.map((r) => [r.username, r.games, r.wins]), [
     [alice.user.username, 3, 2],
     [bob.user.username, 1, 1],
     [carol.user.username, 1, 0],
+    [dora.user.username, 0, 0],
   ]);
   assert.equal((await client(srv.baseUrl).get("/api/leaderboard")).status, 401);
 
@@ -62,7 +65,7 @@ test("an abandoned game two or more people played is a loss for each; a solo one
     const rows = (await dan.c.get("/api/leaderboard")).body;
     return [dan, eve].map((u) => { const r = rows.find((x) => x.id === u.user.id); return r ? [r.games, r.wins] : null; });
   };
-  assert.deepEqual(await record(), [null, null]);
+  assert.deepEqual(await record(), [[0, 0], [0, 0]]);
 
   // Dan and Eve both walk out; with nobody left the game is abandoned.
   const duo = (await dan.c.post("/api/games", { seats: [{ kind: "human" }, { kind: "open" }, AI, AI] })).body.id;
@@ -108,5 +111,5 @@ test("someone who never moved has not played: no loss for them, and no game of t
   assert.equal(rooms.leaveGame(room, fay.user.id).ok, true);
   assert.equal(queries.getGameById.get(id).status, "aborted");
   const rows = (await fay.c.get("/api/leaderboard")).body;
-  assert.equal(rows.some((r) => r.id === fay.user.id || r.id === gus.user.id), false);
+  for (const u of [fay, gus]) assert.equal(rows.find((r) => r.id === u.user.id).games, 0, u.user.username);
 });

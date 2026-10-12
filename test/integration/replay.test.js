@@ -2,8 +2,8 @@
 
 // Replays: a game rebuilt from its seed and its recorded actions reaches the
 // very snapshots the server stored, through player actions, AI rounds, a
-// timeout, a takeover and a leave. GET /api/games/:id/replay hands the page
-// what it needs.
+// timeout, a takeover, a leave and a seat lost to the missed-turn limit.
+// GET /api/games/:id/replay hands the page what it needs.
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -11,6 +11,7 @@ const { startServer, registerUser, connectSocket, emitAck, waitFor } = require("
 const { deserializeGame } = require("../../src/shared/snapshot");
 const { getReachableTiles } = require("../../src/shared/state");
 const { replayAll } = require("../../src/shared/replay");
+const { MISSED_TURN_LIMIT } = require("../../src/shared/settings");
 const rooms = require("../../src/game/rooms");
 const queries = require("../../src/db/queries");
 
@@ -100,6 +101,56 @@ test("replaying the recorded actions reproduces the stored game, step by step", 
   assert.equal(replay.labels[5], "The Huns runs out of time");
   assert.equal(replay.labels[9], "The Huns leaves the game");
   assert.equal(replay.labels[10], "Greece leaves the game");
+});
+
+test("a seat that runs out of time at the limit goes to the AI in the replay too", async (t) => {
+  const alice = await registerUser(srv.baseUrl, "carol");
+  const bob = await registerUser(srv.baseUrl, "dave");
+  const id = (await alice.c.post("/api/games", { seats: [{ kind: "human" }, { kind: "open" }, { kind: "ai" }, { kind: "ai" }], seed: 8, turnTime: "1m" })).body.id;
+  await bob.c.post(`/api/games/${id}/seats/1/join`);
+  await alice.c.post(`/api/games/${id}/start`);
+  const a = await connectSocket(srv.baseUrl, alice.c.cookie());
+  t.after(() => a.close());
+  let sa = (await emitAck(a, "game:join", { gameId: id })).state;
+  const stored = () => JSON.parse(rooms.getRoom(id).lastSnapshot);
+  const snapshots = [stored()];
+  const room = rooms.getRoom(id);
+
+  // Alice ends her turns; bob lets every one of his run out, up to the limit.
+  for (let i = 0; i < MISSED_TURN_LIMIT; i++) {
+    let next = waitFor(a, "game:state");
+    assert.equal((await act(a, id, sa, { type: "endTurn" })).ok, true);
+    sa = await next;
+    snapshots.push(stored());
+    next = waitFor(a, "game:state");
+    assert.equal(rooms.expireTurn(room, room.deadline + 1), true);
+    sa = await next;
+    snapshots.push(stored());
+  }
+  assert.equal(sa.seats[1].kind, "ai");
+  // The AI plays bob's seat from here: alice's next turn comes straight back.
+  let next = waitFor(a, "game:state");
+  assert.equal((await act(a, id, sa, { type: "endTurn" })).ok, true);
+  sa = await next;
+  snapshots.push(stored());
+  next = waitFor(a, "game:state");
+  assert.deepEqual(await emitAck(a, "game:leave", { gameId: id }), { ok: true });
+  sa = await next;
+  snapshots.push(stored());
+  assert.equal(sa.status, "aborted");
+
+  const record = (await alice.c.get(`/api/games/${id}/replay`)).body;
+  assert.deepEqual(record.actions.map((x) => x.action.type),
+    [...Array(MISSED_TURN_LIMIT)].flatMap(() => ["endTurn", "timeout"]).concat("endTurn", "leave"));
+  const replay = replayAll(record);
+  assert.equal(replay.error, null);
+  assert.equal(replay.states.length, snapshots.length);
+  for (let i = 0; i < snapshots.length; i++) {
+    assert.deepEqual(replay.states[i], snapshots[i], `state after ${i} action(s)`);
+  }
+  // Bob's civ is the AI's from the last timeout on, not a moment before.
+  assert.equal(replay.states[2 * MISSED_TURN_LIMIT - 1].game.civs[1].isCpu, false);
+  assert.equal(replay.states[2 * MISSED_TURN_LIMIT].game.civs[1].isCpu, true);
 });
 
 test("the replay endpoint: 404 for unknown games and tables; a record that breaks the rules is reported", async () => {

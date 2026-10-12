@@ -25,7 +25,7 @@
   function render() {
     if (!rows) return;
     content.innerHTML = "";
-    if (!rows.length) { content.appendChild(el("p", "muted", "No finished games yet.")); return; }
+    if (!rows.length) { content.appendChild(el("p", "muted", "No players yet.")); return; }
     const table = el("table", "lb-table");
     const head = el("tr");
     for (const h of ["#", "Player", "Games", "Wins", "Win rate", ""]) head.appendChild(el("th", null, h));

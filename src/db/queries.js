@@ -90,18 +90,19 @@ module.exports = {
   `),
 
   // --- leaderboard (src/game/leaderboard.js) ---
-  // Every active account with a seat in a counted game (COUNTED, above):
-  // games played and games won, top 100 by wins.
+  // Every active account, played or not: games played and games won over
+  // counted games (COUNTED, above), top 100 by wins. The left joins keep an
+  // account with no counted game as 0 / 0, ranked below everyone who played.
   leaderboard: db.prepare(`
     SELECT u.id, u.username,
-           COUNT(*) AS games,
+           COUNT(g.id) AS games,
            SUM(CASE WHEN ${WON} THEN 1 ELSE 0 END) AS wins
     FROM users u
-    JOIN game_seats s ON s.user_id = u.id
-    JOIN games g ON g.id = s.game_id
-    WHERE u.deactivated_at IS NULL AND ${COUNTED}
+    LEFT JOIN game_seats s ON s.user_id = u.id
+    LEFT JOIN games g ON g.id = s.game_id AND ${COUNTED}
+    WHERE u.deactivated_at IS NULL
     GROUP BY u.id
-    ORDER BY wins DESC, games ASC, u.username COLLATE NOCASE ASC
+    ORDER BY wins DESC, games = 0, games ASC, u.username COLLATE NOCASE ASC
     LIMIT 100
   `),
 

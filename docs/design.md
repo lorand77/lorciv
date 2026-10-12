@@ -867,8 +867,9 @@ line.
 ## Looking back: leaderboard and replays
 
 **Leaderboard.** `GET /api/leaderboard` (`src/game/leaderboard.js`,
-`queries.leaderboard`): every active account with a seat in a counted game,
-with games played and games won, top 100 by wins, the sort and the cut in SQL.
+`queries.leaderboard`): every active account, with games played and games
+won over counted games, top 100 by wins, the sort and the cut in SQL. An
+account with no counted game is listed at 0 / 0, below everyone who played.
 A finished game counts. So does an abandoned one (aborted after it started:
 no human left in it, or the abandon sweep) that two or more people played, as
 a loss for each of them, so walking out on other people does not keep a

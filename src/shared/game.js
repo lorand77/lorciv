@@ -327,6 +327,10 @@ class Game {
         this.nextId        = 1;   // next unit or city id (unitById, cityById)
         this.scoreHistory  = [];  // one entry per completed round: [score per civ]
         this.aiState       = {};  // per-civ strategy memory, owned by ai.js
+        // Told what happened in combat, as it happens: a function taking an
+        // event and the game, or null. It only watches and is never saved; the
+        // server's achievements read a replayed game through it (_notify).
+        this.observer      = null;
 
         this._rng = makePRNG((seed ^ 0xABCD1234) >>> 0);
 
@@ -501,6 +505,13 @@ class Game {
     cityById(id) {
         for (const civ of this.civs) for (const c of civ.cities) if (c.id === id) return c;
         return null;
+    }
+
+    // An event for the observer, if there is one: { type: 'cityAttacked', by,
+    // owner, cityId, fell }, { type: 'cityCaptured', by, from, cityId, capital,
+    // eliminated }, { type: 'unitKilled', by, attackerType, victim, victimType }.
+    _notify(event) {
+        if (this.observer) this.observer(event, this);
     }
 
     // ---- Unit actions ----
@@ -811,6 +822,8 @@ class Game {
             for (const u of [...oldCiv.units]) this.removeUnit(u);
             oldCiv.units = [];
         }
+        this._notify({ type: 'cityCaptured', by: newOwnerIdx, from: oldOwnerIdx, cityId: city.id,
+                       capital: oldCiv.originalCapital === city, eliminated: oldCiv.isEliminated });
     }
 
     doAttack(attacker, targetQ, targetR) {
@@ -842,11 +855,15 @@ class Game {
                 const [cityDmg] = bombardCity(attacker, targetCity, attackerTile);
                 attacker.xp += 2;
                 msg = `Bombarded ${targetCity.name}: -${cityDmg} HP (HP: ${targetCity.hp}/50)`;
+                this._notify({ type: 'cityAttacked', by: attacker.owner, owner: targetCity.owner,
+                               cityId: targetCity.id, fell: false });
             } else {
                 const oldOwnerIdx = targetCity.owner;
                 const [cityDmg, aDmg] = bombardCity(attacker, targetCity, attackerTile);
                 if (attacker.hp > 0) attacker.xp += 2;
                 msg = `Attacked ${targetCity.name}: -${cityDmg} HP (HP: ${targetCity.hp}/50), attacker -${aDmg} HP`;
+                this._notify({ type: 'cityAttacked', by: attacker.owner, owner: oldOwnerIdx,
+                               cityId: targetCity.id, fell: targetCity.hp <= 0 });
                 if (targetCity.hp <= 0) {
                     if (targetUnit && targetUnit.owner === oldOwnerIdx) this.removeUnit(targetUnit);
                     this._captureCity(attacker, targetCity);
@@ -870,6 +887,8 @@ class Game {
 
             if (targetUnit.hp <= 0) {
                 this.removeUnit(targetUnit);
+                this._notify({ type: 'unitKilled', by: attacker.owner, attackerType: attacker.unitType,
+                               victim: targetUnit.owner, victimType: targetUnit.unitType });
                 if (unitType === 'melee' && attacker.hp > 0)
                     this._advanceUnit(attacker, targetQ, targetR);
             } else {

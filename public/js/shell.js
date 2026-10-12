@@ -21,6 +21,7 @@
     { href: "/profile.html", icon: "👤", label: "My Profile", children: [
       { tab: "stats", icon: "📊", label: "Stats" },
       { tab: "games", icon: "📜", label: "My Games" },
+      { tab: "achievements", icon: "🏅", label: "Achievements" },
       { tab: "friends", icon: "👥", label: "Friends" },
     ] },
     { href: "/customize.html", icon: "🎨", label: "Customize" },

@@ -13,6 +13,7 @@ const { allowSocketRequest } = require("../auth/origin");
 const queries = require("../db/queries");
 const config = require("../config");
 const rooms = require("./rooms");
+const achievements = require("../achievements/service");
 
 // Everyone looking at a game, players and spectators, sits in this room and
 // receives every state broadcast and every chat message.
@@ -59,8 +60,8 @@ function attachSockets(httpServer) {
     }
   }), config.DEACTIVATION_SWEEP_MS).unref();
 
-  // rooms.js knows nothing about sockets; it says what happened and this
-  // module tells the people concerned.
+  // rooms.js and the achievements service know nothing about sockets; they
+  // say what happened and this module tells the people concerned.
   rooms.events.on("state", (room) => broadcastState(io, room));
   rooms.events.on("lobby", () => io.to(LOBBY).emit("lobby:changed"));
   rooms.events.on("turn", (room) => {
@@ -68,6 +69,9 @@ function attachSockets(httpServer) {
     if (s && s.kind === "human") {
       io.to(userRoom(s.userId)).emit("turn:yours", { gameId: room.gameId, deadline: room.deadline });
     }
+  });
+  achievements.events.on("earned", ({ userId, earned }) => {
+    io.to(userRoom(userId)).emit("achievements:earned", earned);
   });
 
   io.engine.use(sessionMiddleware);

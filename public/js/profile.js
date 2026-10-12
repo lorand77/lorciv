@@ -1,14 +1,13 @@
 "use strict";
 
-// The profile page: whose it is, then three tabs: Stats, My Games, Friends
-// (LorChess's profile without Achievements). ?id=<userId> shows someone
-// else's, with the Games and Friends tabs read-only and a friend control under
-// the name.
+// The profile page: whose it is, then four tabs: Stats, My Games,
+// Achievements, Friends (LorChess's profile). ?id=<userId> shows someone
+// else's, with the tabs read-only and a friend control under the name.
 //
-// Each tab's script (stats.js, history.js, friendsPage.js) registers a
-// function in window.profileTabs; this runs it the first time that tab is
-// shown, so opening the page doesn't also fetch a game list or open the
-// friends socket nobody asked for. The tab lives in the URL hash, so tabs can
+// Each tab's script (stats.js, history.js, achievementsPage.js,
+// friendsPage.js) registers a function in window.profileTabs; this runs it
+// the first time that tab is shown, so opening the page doesn't also fetch a
+// game list or open the friends socket nobody asked for. The tab lives in the URL hash, so tabs can
 // be linked to and back/forward moves between them.
 //
 // On your own profile the tabs are also listed in the left rail (shell.js), so

@@ -2,8 +2,9 @@
 
 // The lobby page: open tables to join, a form for a new table, your games,
 // live games to watch, who is online. The lists come from /api/games; the
-// socket says when to refetch (lobby:changed), who is about (lobby:presence)
-// and when a turn of yours begins (turn:yours). Civ names, colours,
+// socket says when to refetch (lobby:changed), who is about (lobby:presence),
+// when a turn of yours begins (turn:yours) and what you just earned
+// (achievements:earned, shown as toasts). Civ names, colours,
 // difficulties and turn times come from the shared engine scripts, so the
 // form offers exactly what the server accepts.
 
@@ -294,6 +295,7 @@
   socket.on("lobby:changed", refresh);
   socket.on("lobby:presence", renderPresence);
   socket.on("turn:yours", yourTurn);
+  socket.on("achievements:earned", (list) => AchievementToast.show(list));
 
   window.addEventListener("user:known", (e) => { me = e.detail; refresh(); });
 })();

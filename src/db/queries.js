@@ -82,9 +82,11 @@ module.exports = {
       (SELECT COUNT(*) FROM game_seats s JOIN games g ON g.id = s.game_id
         WHERE s.user_id = @id AND g.status = 'lobby' AND g.host_id != @id) AS tableSeats,
       (SELECT COUNT(*) FROM chat_messages WHERE user_id = @id) AS chat,
-      (SELECT COUNT(*) FROM friendships WHERE requester_id = @id OR addressee_id = @id) AS friendships
+      (SELECT COUNT(*) FROM friendships WHERE requester_id = @id OR addressee_id = @id) AS friendships,
+      (SELECT COUNT(*) FROM user_achievements WHERE user_id = @id) AS achievements
   `),
   deleteChatOf: db.prepare("DELETE FROM chat_messages WHERE user_id = @id"),
+  deleteAchievementsOf: db.prepare("DELETE FROM user_achievements WHERE user_id = @id"),
   deleteFriendshipsOf: db.prepare("DELETE FROM friendships WHERE requester_id = @id OR addressee_id = @id"),
   // The row itself stays, because seats and action rows point at it and are
   // the other players' record too. Registration allows only [A-Za-z0-9_], so
@@ -132,6 +134,51 @@ module.exports = {
     SELECT COUNT(*) AS n FROM game_seats s JOIN games g ON g.id = s.game_id
     WHERE s.user_id = ? AND s.kind = 'human' AND g.status = 'active'
   `),
+
+  // --- achievements (src/achievements/service.js) ---
+  // Ended games not yet looked at, oldest first: at boot, every game from
+  // before achievements existed (the backfill) and any a restart cut short.
+  // A table cancelled before it started has no snapshot and nothing to award.
+  listUnawardedGames: db.prepare(`
+    SELECT id FROM games
+    WHERE status IN ('finished', 'aborted') AND snapshot IS NOT NULL AND achievements_at IS NULL
+    ORDER BY finished_at, id
+  `),
+  markGameAwarded: db.prepare("UPDATE games SET achievements_at = datetime('now') WHERE id = ?"),
+  setSeatCaptures: db.prepare("UPDATE game_seats SET captures = ? WHERE game_id = ? AND seat = ?"),
+  // The seats of one game that count for their person (COUNTED), active
+  // accounts only: whether the seat won, and how many people sat down.
+  achievementSeats: db.prepare(`
+    SELECT s.seat, s.user_id, u.username, CASE WHEN ${WON} THEN 1 ELSE 0 END AS won,
+           (SELECT COUNT(*) FROM game_seats o WHERE o.game_id = g.id AND o.user_id IS NOT NULL) AS people
+    FROM game_seats s JOIN games g ON g.id = s.game_id JOIN users u ON u.id = s.user_id
+    WHERE g.id = ? AND u.deactivated_at IS NULL AND ${COUNTED}
+    ORDER BY s.seat
+  `),
+  // A user's counted games in the order they ended: the seat, whether it won,
+  // and the cities taken in it (0 until its achievements are awarded). With
+  // @at and @gameId, only the games that ended up to that one, so a game
+  // awarded late (the backfill) is credited with the record as it stood then.
+  achievementRecord: db.prepare(`
+    SELECT s.seat, CASE WHEN ${WON} THEN 1 ELSE 0 END AS won, COALESCE(s.captures, 0) AS captures
+    FROM game_seats s JOIN games g ON g.id = s.game_id
+    WHERE s.user_id = @userId AND ${COUNTED}
+      AND (@at IS NULL OR g.finished_at < @at OR (g.finished_at = @at AND g.id <= @gameId))
+    ORDER BY g.finished_at, g.id
+  `),
+  getUserAchievement: db.prepare("SELECT tier FROM user_achievements WHERE user_id = ? AND key = ?"),
+  // Insert, or raise the tier. A lower or equal tier is a no-op, so `changes`
+  // says whether anything was earned and awarding twice is harmless.
+  awardAchievement: db.prepare(`
+    INSERT INTO user_achievements (user_id, key, tier, earned_at, game_id)
+    VALUES (@userId, @key, @tier, COALESCE(@at, datetime('now')), @gameId)
+    ON CONFLICT (user_id, key) DO UPDATE SET
+      tier = excluded.tier, earned_at = excluded.earned_at, game_id = excluded.game_id
+    WHERE excluded.tier > user_achievements.tier
+  `),
+  listAchievements: db.prepare(
+    "SELECT key, tier, earned_at, game_id FROM user_achievements WHERE user_id = ? ORDER BY earned_at DESC, key"
+  ),
 
   // --- games (src/game/rooms.js, src/game/routes.js) ---
   // A game starts life as a table in the lobby; startGame makes it active.

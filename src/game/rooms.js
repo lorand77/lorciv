@@ -26,6 +26,7 @@ const { runCpuTurns } = require("../shared/ai");
 const { serializeGame, deserializeGame } = require("../shared/snapshot");
 const { applyAction } = require("../shared/actions");
 const settings = require("../shared/settings");
+const achievements = require("../achievements/service");
 
 const rooms = new Map(); // gameId -> room
 const events = new EventEmitter();
@@ -344,6 +345,7 @@ function commit(room, action, seat, userId, seatChange = null) {
   } else if (room.status === "aborted") {
     log.info("game.abort", { game: room.gameId, reason: "no_humans", turn: game.turn });
   }
+  if (room.status !== "active") achievements.gameEnded(room.gameId);
   events.emit("state", room);
   // The lobby lists whose turn it is and the status, not every move.
   if (before.status !== room.status || turnChanged) events.emit("lobby");
@@ -440,14 +442,18 @@ function sweepAbandoned() {
   const ids = queries.listAbandonable.all(cutoff).map((r) => r.id);
   if (!ids.length) return 0;
   queries.sweepAbandoned.run(cutoff);
-  for (const id of ids) rooms.delete(id);
+  for (const id of ids) {
+    rooms.delete(id);
+    achievements.gameEnded(id);
+  }
   log.info("game.abandon_sweep", { aborted: ids.length, days: config.ABANDON_DAYS });
   events.emit("lobby");
   return ids.length;
 }
 
-// At boot: rebuild every active game so its turn timer runs, and start the
-// sweeps. Nothing is thrown away. A game that cannot be rebuilt (a snapshot
+// At boot: rebuild every active game so its turn timer runs, start the
+// sweeps, and queue the achievements of every game that ended unawarded
+// (src/achievements/service.js). Nothing is thrown away. A game that cannot be rebuilt (a snapshot
 // from an engine version with no migration, a hand-edited row) is logged and
 // left in the database; it must not keep every other game from booting.
 function resumeAll() {
@@ -461,6 +467,7 @@ function resumeAll() {
     }
   }
   log.info("process.resumed", { games: n });
+  achievements.start();
   if (!sweepTimer) sweepTimer = setInterval(() => sweepDeadlines(), config.DEADLINE_SWEEP_MS).unref();
   if (!abandonTimer) abandonTimer = setInterval(() => safely(sweepAbandoned, "abandon sweep"), 60 * 60 * 1000).unref();
   return n;
@@ -525,10 +532,11 @@ function listRooms() {
   return [...rooms.values()];
 }
 
-// Forget every live room, stop the sweeps and drop the listeners (tests
-// simulate a restart with it).
+// Forget every live room, stop the sweeps and the achievements worker, and
+// drop the listeners (tests simulate a restart with it).
 function clearAll() {
   rooms.clear();
+  achievements.stop();
   if (sweepTimer) { clearInterval(sweepTimer); sweepTimer = null; }
   if (abandonTimer) { clearInterval(abandonTimer); abandonTimer = null; }
   events.removeAllListeners();

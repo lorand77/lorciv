@@ -32,8 +32,12 @@ under `src/game/` or `src/shared/`.
   instance per game, its seats, and every write to the database.
 - `src/shared/` — the game engine, loaded by browser and Node alike and served
   at `/js/`: `hex`, `state`, `mapgen`, `game`, `ai` (server and the replay
-  page), `snapshot`, `settings`, `actions`, `replay`. Player actions go through
+  page), `snapshot`, `settings`, `actions`, `replay`, and `achievements` (the
+  catalogue, for the server and the profile). Player actions go through
   `actions.js` and nowhere else.
+- `src/achievements/` — awarding: `service.js` queues each ended game (and at
+  boot every one not yet awarded), `worker.js` replays it off the main thread
+  through `analyze.js`, `routes.js` is `/api/achievements`.
 - `public/*.html` pages with their scripts in `public/js/`; `shell.js` builds
   the top bar and rail, `authGuard.js` bounces signed-out visitors to login.
   `game.html` is the game: `ui.js` (renders snapshots, sends actions, chat),
@@ -41,8 +45,10 @@ under `src/game/` or `src/shared/`.
   lobby: tables, seats, your games, live games, presence. `replay.html`/
   `replay-page.js` rebuilds a game from its actions; `leaderboard.html`/
   `leaderboard.js` ranks players. `profile.html` is the profile: `profile.js`
-  runs the tabs `stats.js`, `history.js` (My Games) and `friendsPage.js`;
-  `friends.js` is the friends client and control. `customize.html`/
+  runs the tabs `stats.js`, `history.js` (My Games), `achievementsPage.js` and
+  `friendsPage.js`; `friends.js` is the friends client and control;
+  `achievementToast.js` (styled by `css/toast.css`) shows new achievements on
+  the game page and the lobby. `customize.html`/
   `customize.js` sets the colour scheme, which `theme.js` applies on every
   page with the shell and on terms and privacy. A page script must not share a name with a file in
   `src/shared/`, which is served at `/js/` first. `public/assets/` holds the

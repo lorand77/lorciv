@@ -1,0 +1,37 @@
+/* Achievement unlock toasts (public/js/achievementToast.js), bottom-right,
+   stacked. A file of its own because the game page loads game.css and not
+   styles.css; the toast is dark in either colour scheme. */
+.ach-toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2000;
+  pointer-events: none;
+}
+.ach-toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  background: #2a2f3a;
+  border: 1px solid #d9a92b;
+  border-radius: 8px;
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateX(24px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: auto;
+}
+.ach-toast.show { opacity: 1; transform: none; }
+.ach-toast-icon { font-size: 28px; line-height: 1; flex: none; }
+.ach-toast-body { display: flex; flex-direction: column; min-width: 0; }
+.ach-toast-head { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #f0c85a; }
+.ach-toast-name { font-weight: bold; font-size: 14px; }
+.ach-toast-desc { font-size: 12px; color: #c8c8c8; }

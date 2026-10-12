@@ -431,6 +431,33 @@ a.player-link:hover { text-decoration: underline; }
 .out-progress { color: var(--warn); }
 .out-neutral { color: var(--text-muted); }
 
+/* --- the profile's Achievements tab (public/js/achievementsPage.js) --- */
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+}
+.ach-card {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-width: 0;
+}
+.ach-card.locked { opacity: 0.45; filter: grayscale(0.6); }
+.ach-card.maxed { border-color: #b8901f; }
+.ach-icon { font-size: 26px; line-height: 1; width: 32px; text-align: center; flex: none; padding-top: 2px; }
+.ach-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 13px; }
+.ach-name { font-weight: bold; color: var(--text); }
+.ach-desc { color: var(--text-2); font-size: 12px; }
+.ach-tiers { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.ach-pip { width: 10px; height: 10px; border-radius: 50%; background: var(--disabled-bg); border: 1px solid var(--field-border-strong); }
+.ach-pip.on { background: #d9a92b; border-color: #f0c85a; }
+.ach-tier-label { margin-left: 4px; font-size: 11px; color: var(--text-muted); }
+.ach-meta { font-size: 11px; margin-top: 2px; }
+
 /* --- Customize (public/js/customize.js) --- */
 .scheme-choice { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px; }
 .scheme-opt {

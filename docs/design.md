@@ -21,8 +21,8 @@ rebuilt at boot; tables in the lobby seat up to four people with AI in the
 other seats; turn timers end an absent player's turn and hand the seat to the
 AI after too many misses; the game page plays through the server with chat and
 survives a reload and a server restart. Of the polish (M5), account deletion,
-the leaderboard, replays, profiles with friends, and a Customize page with the
-colour scheme exist. The sections below describe what exists.
+the leaderboard, replays, profiles with friends, a Customize page with the
+colour scheme, and achievements exist. The sections below describe what exists.
 The last section lists what is still ahead.
 
 ## Tech stack
@@ -49,19 +49,24 @@ src/
                (every Socket.IO event), routes.js (/api/games),
                leaderboard.js (/api/leaderboard)
   stats/       routes.js (/api/stats: the profile's record)
+  achievements/ service.js (awarding, the queue), analyze.js (a game's feats
+               from its replay), worker.js (the thread it runs in),
+               routes.js (/api/achievements)
   friends/     routes.js (/api/friends)
   settings/    routes.js (/api/settings: the colour scheme)
   shared/      the engine, served at /js/ ahead of public/ (see "The engine")
                hex.js state.js mapgen.js game.js ai.js snapshot.js settings.js
-               actions.js replay.js
+               actions.js replay.js achievements.js
 public/
   index.html login.html lobby.html game.html replay.html leaderboard.html
   profile.html customize.html terms.html privacy.html
-  css/         styles.css (every page but the game), game.css (game and replay)
+  css/         styles.css (every page but the game), game.css (game and replay),
+               toast.css (achievement toasts, game and lobby)
   assets/      terrain and resource PNGs
   js/          login.js net.js authGuard.js shell.js theme.js lobby.js
                leaderboard.js friends.js
-               profile.js stats.js history.js friendsPage.js (the profile)
+               profile.js stats.js history.js achievementsPage.js
+               friendsPage.js (the profile) achievementToast.js
                customize.js (the Customize page)
                renderer.js (the canvas map) ui.js (the game page)
                replay-page.js (the replay page)
@@ -284,6 +289,12 @@ Events:
 - **Process, continued:** `process.resumed` (`games`: active games rebuilt at boot).
 - **Chat:** `chat.retention` (`removed`, `days`), `chat.retention_failed`
   (`error`). Never the text.
+- **Achievements:** `achievements.earned` (`user`, `name`, `game`, `keys`:
+  what one game newly earned one person, a tier as `key:tier`),
+  `achievements.replay_failed` (`warn`, `game`, `error=refused|mismatch|threw|worker`,
+  `seq`: the game was awarded without its replay), `achievements.failed`
+  (`error`, `game`, `err`: the worker died, or awarding threw and the game is
+  left for the next boot).
 - **Data:** `db.migrated` (`added=<table>.<column>`), `db.case_duplicates`
   (`warn`, `names`).
 
@@ -303,19 +314,23 @@ What is never logged, and where personal data may appear:
 a table that already exists needs `ALTER`, so those go through
 `addColumnIfMissing` in `src/db/index.js`, which runs at every boot and brings
 an older database up to date. A new column on an existing table therefore needs
-a line there, or existing databases never get it. The one migration so far adds
-`users.prefs` (2026-10-11); `test/integration/migrations.prefs.test.js` runs it
-against a database in the shape it had before.
+a line there, or existing databases never get it. The migrations so far add
+`users.prefs` (2026-10-11) and `games.achievements_at` and
+`game_seats.captures` (2026-10-12); `test/integration/migrations.*.test.js`
+run them against a database in the shape it had before.
 
 Tables: `users` (id, username, password_hash, created_at, deactivated_at, and
 `prefs`, the display settings as JSON, NULL for the defaults);
 `sessions`, which the session store creates itself; `games` (status, host,
 seed, settings JSON, the snapshot JSON, seq, turn, current seat, deadline,
-winner, timestamps), `game_seats` (one row per seat: open, human or ai, the
-user, the difficulty, missed turns), `game_actions` (every player action in
-order, as JSON, plus the server's `timeout` and `leave` rows),
-`chat_messages`, and `friendships` (one row per pair, requester to addressee,
-pending until accepted). The snapshot column is overwritten after every action; it is
+winner, timestamps, and `achievements_at`, when its achievements were
+awarded), `game_seats` (one row per seat: open, human or ai, the user, the
+difficulty, missed turns, and `captures`, the cities taken while its person
+played it), `game_actions` (every player action in order, as JSON, plus the
+server's `timeout` and `leave` rows), `chat_messages`, `friendships` (one row
+per pair, requester to addressee, pending until accepted), and
+`user_achievements` (one row per user per achievement: the highest tier, when,
+and the game that earned it). The snapshot column is overwritten after every action; it is
 what a room is rebuilt from. The action rows are an audit trail and the raw
 material for replays; AI turns are not rows, since they follow
 deterministically from the end of turn that triggered them. Chat is swept
@@ -337,7 +352,9 @@ and every live game, down. The game events are `game:join`, `game:action`,
 "The game on the server" and "Playing together". The module also listens to
 `rooms.events` and does the telling: `game:state` to every socket in a game's
 room with its own view, `lobby:changed` to the lobby room, `turn:yours` to the
-`user:<id>` room of the seat whose turn began. One event comes from a REST
+`user:<id>` room of the seat whose turn began. It listens to the
+achievements service the same way and sends `achievements:earned` to the
+`user:<id>` room of whoever earned something. One event comes from a REST
 route instead: `src/friends/routes.js` sends `friends:changed` to the
 `user:<id>` rooms of both people after every friendship change.
 
@@ -389,8 +406,8 @@ stored (the account, the session, the games a player takes part in with every
 action and the result, visible to every signed-in player since spectating is
 open, and in-game chat, seen by everyone in the game and deleted
 `CHAT_RETENTION_DAYS` after it ends; friendships and requests, and the colour
-scheme); what a profile shows other players (join date, record, games,
-friends; a request only to its two people); the copy of the scheme kept in
+scheme, achievements); what a profile shows other players (join date,
+record, games, achievements, friends; a request only to its two people); the copy of the scheme kept in
 the browser and removed at logout; what deletion removes and keeps (see
 Authentication); sessions last 7 days
 (`src/auth/session.js`); IPs live in the throttle's memory for
@@ -423,6 +440,7 @@ and made the changes a server needs.
 | `settings.js` | the allowlists: difficulties, turn times, action names | new |
 | `actions.js` | `applyAction`, the one validator for player actions | new |
 | `replay.js` | `replayAll`: a game's states rebuilt from its seed and action rows | new (M5) |
+| `achievements.js` | the achievement catalogue: names, icons, groups, thresholds | new (M5) |
 
 The canvas renderer that used to share `hex.js` is `public/js/renderer.js`,
 moved as it was except that it loads its images from `/assets/`. The old
@@ -548,7 +566,13 @@ round, recorded by `endTurn` when the turn counter advances (`computeScore`
 per civ; the victory graph draws it); `aiState`, the per-civ strategy memory
 that used to be a module-level object in `ai.js` and would have been shared by
 every game on the server; and the PRNG's state, because bankruptcy draws from
-it mid-game. `ai.js` has `runCpuTurns(game, maxTurn)`: while there is no
+it mid-game. And `observer`, null or a function the engine calls with an
+event and the game whenever a city is attacked (`cityAttacked`: by, owner,
+cityId, fell), taken (`cityCaptured`: by, from, cityId, capital, eliminated)
+or a unit is killed in an attack (`unitKilled`: by, attackerType, victim,
+victimType). It only watches, is never saved, and nothing in a live game sets
+it: the achievements read a replayed game through it (`replayStart(setup,
+observer)`). `ai.js` has `runCpuTurns(game, maxTurn)`: while there is no
 winner and the current civ is a CPU, take its turn and end it. It also stops
 the moment the last human civ is eliminated: the turn order skips eliminated
 civs, so otherwise the AI would play the rest of the game in that one call,
@@ -920,13 +944,14 @@ the game page does not.
 
 ## Profiles and friends
 
-Copied from LorChess's profile without its Achievements tab (not for now), and
-without the Analysis Board and Membership pages, which have no counterpart.
+Copied from LorChess's profile, without the Analysis Board and Membership
+pages, which have no counterpart. Its Achievements tab came later, with
+achievements built for this game (see "Achievements").
 
 **The profile page.** `profile.html` (`profile.js`) is yours, or with
 `?id=<userId>` anyone's (your own id is still yours). It shows the name and
-the join date, and three tabs in the URL hash, `#stats`, `#games` and
-`#friends`, so each can be linked to. Each tab's script registers a function in
+the join date, and four tabs in the URL hash, `#stats`, `#games`,
+`#achievements` and `#friends`, so each can be linked to. Each tab's script registers a function in
 `window.profileTabs` and `profile.js` runs it the first time the tab opens, so
 the page does not fetch a games list or open a socket nobody looked at. On
 someone else's profile the tabs are read-only and a friend control sits under
@@ -955,6 +980,11 @@ unknown one.
   Abandoned, In progress or Your turn, Table) and Play, Watch, Replay or a link
   to the lobby. The lobby keeps its own "My games" list; this one is the full
   record on the profile.
+- **Achievements** (`achievementsPage.js`, `GET /api/achievements` and
+  `/api/achievements/:id`): the whole catalogue by group, each card earned or
+  greyed, with the date and a link to the replay of the game that earned it;
+  a tiered one shows its tier and the count toward the next. See
+  "Achievements".
 - **Friends** (`friendsPage.js`): requests to you, with Accept and Decline,
   then your friends (Remove) and the requests you sent (Withdraw). Someone
   else's tab is only their accepted friends.
@@ -973,6 +1003,80 @@ the profile and the leaderboard put next to a player. LorChess's game
 challenges and online badges were not copied: a civ game starts from a table,
 and inviting a friend to one is for later.
 
+## Achievements
+
+Badges for things done in games, on the model of LorChess's, built for this
+game. The catalogue is `src/shared/achievements.js` (name, icon, group,
+description, and the threshold the server checks, so the text and the rule
+cannot drift apart), served at `/js/achievements.js` for the profile and
+required by the server. Four groups: **Victory** (First Blood; a win alone
+against the AI with every AI at Prince, King or Emperor or harder; World
+Conqueror, a win with three other people at the table; Blitz, a win by turn
+150; Flawless, never losing a city; Comeback, a win after losing one's
+capital; Four Banners, a win as every civ; Hat Trick, three wins in a row),
+**Conquest** (Capital Punishment, taking another civ's original capital;
+Kingslayer, taking a civ's last city; Fortress, a city with Walls and a Castle
+holding through 5 attacks; Upgrade Path, a Longswordsman, Knight, Crossbowman
+and Trebuchet fielded at once; Underdog, a Warrior or Archer destroying a
+medieval unit), **Empire** (Founder, 5 cities founded; Scholar, every tech;
+Golden Age, every kind of building standing at once; Treasure Hunter, Gold,
+Silver and Diamonds held at once; Iron and Horses, both held by turn 75;
+Metropolis, a city of 20) and **Milestones**, tiered Bronze, Silver and Gold
+(games played 10/50/100, wins 5/25/100, cities captured 10/50/200). The
+numbers come from AI-only games (`tools/simulate.js`): they are won between
+turns 170 and 320, their biggest cities reach 7 to 24, and no AI civ ever
+stands every building.
+
+- **Who earns.** Only the people a game counts for, by the leaderboard's
+  rule (`COUNTED`): a game walked out of alone, or one never moved in, earns
+  nothing, so achievements cannot be farmed where a loss would not count.
+  Deactivated and deleted accounts earn nothing. What happens inside a game
+  counts only while its person plays the seat: once the AI has it, nothing
+  it does is theirs, and a win needs the seat to be theirs at the end anyway.
+- **When.** `rooms.js` calls `gameEnded` when a game finishes or is abandoned
+  (by its last human, or the abandon sweep). The service queues it and does
+  one game at a time, oldest first. At boot `resumeAll` calls `start`, which
+  queues every ended game whose `games.achievements_at` is still NULL: games
+  from before achievements existed (the backfill: the migration adds the
+  column empty) and any a restart cut short. Awarding is an upsert that only
+  ever raises a tier, so doing a game twice changes nothing.
+- **The replay.** Inside-the-game feats are read by replaying the game from
+  its actions (`replay.js`, as the replay page does) with the engine's
+  `observer` attached; `analyze.js`'s tracker turns the events (captures,
+  kills, attacks on cities) and the state after every action (techs,
+  buildings, city sizes, units, resources held) into feats per seat, and
+  counts each seat's captures. Replaying re-runs every AI turn, seconds for a
+  long game, so it runs in a `worker_threads` worker (`worker.js`) and the
+  server's event loop, and every live game, never waits on it. The replay
+  must end exactly on the stored snapshot; one that does not (a record the
+  rules now refuse, or a game played under older rules) is logged
+  (`achievements.replay_failed`) and the game is awarded without its replay:
+  the record and the result still count, its feats and captures do not.
+- **The record.** After the game, each person's counted games up to that one
+  (ordered by when they ended, so the backfill credits a milestone to the
+  game that reached it) give games played, wins, captures (the sum of
+  `game_seats.captures`), a win at every seat, and three wins in a row.
+  The win feats that need the result (the difficulty, World Conqueror, Blitz,
+  Flawless, Comeback) are decided here from the database and the replay's
+  report. A difficulty win is "alone against the AI": the person is the only
+  one who sat down, and the easiest AI seat is at least that level.
+- **Telling.** Newly earned achievements go out as `achievements:earned` to
+  the person's `user:<id>` room, each one fully described (icon, name, tier,
+  description), and the game page and the lobby show them as toasts
+  (`achievementToast.js`, `toast.css`) linking to the profile's tab, which
+  reads `GET /api/achievements[/:id]`: the earned list and the counts behind
+  the tiered ones. Account deletion removes a person's achievements.
+- **Not built.** The social and multiplayer ideas (finishing games with
+  people without leaving, the fastest and slowest clocks, a table of friends,
+  days played) are left for later.
+
+`test/unit/achievements.test.js` checks the catalogue, the observer on a real
+AI game (and that watching changes nothing), the tracker on hand-built states
+and `analyzeGame` on a short record and a broken one;
+`test/integration/achievements.test.js` plays games through the server and
+checks the awards, the toast, the API, the record ones, the games that do not
+count, a game that does not replay, and the backfill at boot.
+
 ## Decided, not yet built
 
 Left of the plan's polish (M5, `docs/plan.md`): a finished-game summary page
@@ -980,6 +1084,8 @@ Left of the plan's polish (M5, `docs/plan.md`): a finished-game summary page
 civ if the round jump feels wrong, touch and small-screen layout, and deleting
 `civ_lite-old/` and the `lorchess/` reference copy once the game page has been
 checked against the original. From the profile work: inviting a friend into a
-seat of a table you host, and achievements. Ideas kept for later: fog of war (the per-seat
+seat of a table you host. From the achievements: social ones (finishing games
+with people without leaving, the fastest and slowest clocks, a table of
+friends, days played). Ideas kept for later: fog of war (the per-seat
 view function is the hook), simultaneous turns, maps sized to the number of
 players, more civs.

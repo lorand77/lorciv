@@ -58,5 +58,11 @@ function addColumnIfMissing(table, column, definition) {
 // existing users need no backfill.
 addColumnIfMissing("users", "prefs", "TEXT");
 
+// 2026-10-12: achievements. NULL means not awarded yet, so every game that
+// ended before is picked up at boot (src/achievements/service.js): that is
+// the backfill.
+addColumnIfMissing("games", "achievements_at", "TEXT");
+addColumnIfMissing("game_seats", "captures", "INTEGER");
+
 module.exports = db;
 module.exports.addColumnIfMissing = addColumnIfMissing;

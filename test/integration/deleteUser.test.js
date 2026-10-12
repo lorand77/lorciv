@@ -1,7 +1,8 @@
 "use strict";
 
 // `npm run user:delete`: the account row stays as deleted-<id>, deactivated and
-// without a password; chat, friendships, display settings and sessions go;
+// without a password; chat, friendships, achievements, display settings and
+// sessions go;
 // tables they host are cancelled and their seats at other tables released; a
 // live seat blocks the deletion.
 
@@ -38,7 +39,7 @@ test("refuses while the user holds a seat in a live game, and tells the operator
   assert.equal(queries.getUserById.get(alice.user.id).username, alice.user.username);
 });
 
-test("deletes: name freed, password gone, chat, friends, settings and sessions removed, tables tidied, games kept", async () => {
+test("deletes: name freed, password gone, chat, friends, achievements, settings and sessions removed, tables tidied, games kept", async () => {
   const alice = await registerUser(srv.baseUrl, "leaving");
   const bob = await registerUser(srv.baseUrl, "staying");
   // A finished game alice took part in, a table she hosts, a seat at bob's table, some chat.
@@ -55,6 +56,10 @@ test("deletes: name freed, password gone, chat, friends, settings and sessions r
   assert.equal((await bob.c.post(`/api/friends/requests/${req.body.id}/accept`)).status, 200);
   assert.equal((await alice.c.post("/api/friends/requests", { toUserId: carol.user.id })).status, 201);
   assert.equal((await alice.c.put("/api/settings", { scheme: "light" })).status, 200);
+  // An achievement of hers, and one of bob's.
+  for (const u of [alice, bob]) {
+    queries.awardAchievement.run({ userId: u.user.id, key: "first_blood", tier: 1, at: null, gameId: finished });
+  }
 
   const refused = cli(alice.user.username, "something else");
   assert.equal(refused.code, 1);
@@ -65,7 +70,7 @@ test("deletes: name freed, password gone, chat, friends, settings and sessions r
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /kept, without the name: 1 finished or abandoned game/);
   assert.match(r.out, /cancelled: 1 table\(s\) hosted; released: 1 seat/);
-  assert.match(r.out, /deleted: 1 chat message\(s\), 2 friendship\(s\) and request\(s\)/);
+  assert.match(r.out, /deleted: 1 chat message\(s\), 2 friendship\(s\) and request\(s\), 1 achievement\(s\)/);
   assert.match(r.out, new RegExp(`deleted ${alice.user.username}: now deleted-${alice.user.id}`));
 
   const row = db().prepare("SELECT * FROM users WHERE id = ?").get(alice.user.id);
@@ -79,6 +84,8 @@ test("deletes: name freed, password gone, chat, friends, settings and sessions r
   assert.equal((await alice.c.get("/api/me")).status, 401, "sessions are gone");
   assert.equal(db().prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE user_id = ?").get(alice.user.id).n, 0);
   assert.equal(db().prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE user_id = ?").get(bob.user.id).n, 1, "others' chat stays");
+  assert.deepEqual(queries.listAchievements.all(alice.user.id), []);
+  assert.equal(queries.listAchievements.all(bob.user.id).length, 1, "others' achievements stay");
   assert.equal(queries.getGameById.get(hosted).status, "aborted", "her table is cancelled");
   assert.equal(queries.getSeats.all(bobs)[1].kind, "open", "her seat at bob's table is free again");
   // The finished game keeps its record, under the new name.

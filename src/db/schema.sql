@@ -43,7 +43,11 @@ CREATE TABLE IF NOT EXISTS games (
   created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
   started_at    TEXT,
   finished_at   TEXT,
-  updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+  updated_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+  -- When the game's achievements were awarded (src/achievements/service.js);
+  -- NULL for a game not over yet or not looked at yet, which the next boot
+  -- picks up. Added after launch: src/db/index.js adds it to older databases.
+  achievements_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_games_status ON games (status);
 
@@ -57,6 +61,9 @@ CREATE TABLE IF NOT EXISTS game_seats (
   difficulty   TEXT    NOT NULL DEFAULT 'prince',
   missed_turns INTEGER NOT NULL DEFAULT 0,   -- consecutive expired turns (M3)
   joined_at    TEXT,
+  -- Cities this seat took while its person played it, read from the replay
+  -- when achievements are awarded; NULL until then. Added after launch.
+  captures     INTEGER,
   PRIMARY KEY (game_id, seat)
 );
 CREATE INDEX IF NOT EXISTS idx_game_seats_user ON game_seats (user_id);
@@ -102,3 +109,16 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chat_game ON chat_messages (game_id, id);
+
+-- Achievements (src/shared/achievements.js is the catalogue). One row per user
+-- per achievement; a tiered one keeps only the highest tier reached, earned_at
+-- when that tier was reached, and game_id the game that earned it (NULL for
+-- none in particular).
+CREATE TABLE IF NOT EXISTS user_achievements (
+  user_id   INTEGER NOT NULL REFERENCES users(id),
+  key       TEXT    NOT NULL,
+  tier      INTEGER NOT NULL DEFAULT 1,
+  earned_at TEXT    NOT NULL DEFAULT (datetime('now')),
+  game_id   INTEGER REFERENCES games(id),
+  PRIMARY KEY (user_id, key)
+);

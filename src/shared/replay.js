@@ -5,7 +5,7 @@
 // The engine is deterministic and the server recorded every action, so
 // playing the same actions over the same seed, in the same way the server
 // did (src/game/rooms.js), gives the same states, snapshot for snapshot.
-// Shared by the replay page and the server's tests.
+// Shared by the replay page, the server's achievements and its tests.
 // ============================================================
 
 // Node: the files this one reads as bare names, hoisted onto globalThis. In the
@@ -16,9 +16,11 @@ if (typeof module !== "undefined" && module.exports) {
 }
 
 // The game as it was handed to its first human: AI seats before the first
-// human seat have already played (rooms.startGame does the same).
-function replayStart(setup) {
+// human seat have already played (rooms.startGame does the same). An
+// `observer` (Game.observer) sees the game from its first move.
+function replayStart(setup, observer = null) {
     const game = new Game({ seed: setup.seed, cpuFlags: setup.cpuFlags, difficultyFlags: setup.difficultyFlags });
+    game.observer = observer;
     runCpuTurns(game);
     return game;
 }

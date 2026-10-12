@@ -17,6 +17,7 @@ const leaderboardRoutes = require("./game/leaderboard");
 const statsRoutes = require("./stats/routes");
 const friendRoutes = require("./friends/routes");
 const settingsRoutes = require("./settings/routes");
+const achievementRoutes = require("./achievements/routes");
 const { attachSockets } = require("./game/socket");
 const rooms = require("./game/rooms");
 
@@ -132,6 +133,7 @@ function createServer() {
   api("/api/stats", statsRoutes);
   api("/api/friends", friendRoutes);
   api("/api/settings", settingsRoutes);
+  api("/api/achievements", achievementRoutes);
 
   // --- Static assets ---
   // One copy of the game engine, in src/shared, served at /js/*. Mounted before

@@ -329,13 +329,13 @@ describe what now exists.
   bucket or prefix, `docs/setup.md` final.
 - Done when: live at the chosen hostname with a nightly backup.
 
-### M5 — Polish (as wanted, in any order) — account deletion, leaderboard, replays, profile and Customize done 2026-10-11
+### M5 — Polish (as wanted, in any order) — account deletion, leaderboard, replays, profile and Customize done 2026-10-11; achievements 2026-10-12
 
 - Finished-game page with the score graph; replay from `game_actions`.
 - Profile and settings pages (copied). Done: the profile with Stats, My Games
   and Friends, and Customize with the colour scheme; see `docs/design.md`,
-  "Profiles and friends". Not copied: achievements (later), the analysis board
-  and membership.
+  "Profiles and friends". Achievements came after, built for this game; see
+  "Achievements" there. Not copied: the analysis board and membership.
 - A simple leaderboard (wins).
 - Broadcast after each AI civ, with the old 100 ms pacing, if the round jump
   feels wrong.

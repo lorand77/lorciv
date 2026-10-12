@@ -9,7 +9,7 @@
 // it from the leaderboard, friends lists and profiles, and lets the server's
 // deactivation sweep close its open sockets (see deactivate.js). Everything
 // else about the person is deleted: the chat they wrote, their friendships and
-// requests, their display settings, their sessions. Tables they host are
+// requests, their achievements, their display settings, their sessions. Tables they host are
 // cancelled and seats they hold at other tables released. The old username can
 // be registered again.
 //
@@ -70,7 +70,7 @@ async function main() {
   console.log(`${user.username} (id ${user.id}), joined ${user.created_at.slice(0, 10)}`);
   console.log(`  kept, without the name: ${n.games} finished or abandoned game(s)`);
   console.log(`  cancelled: ${n.tables} table(s) hosted; released: ${n.tableSeats} seat(s) at other tables`);
-  console.log(`  deleted: ${n.chat} chat message(s), ${n.friendships} friendship(s) and request(s), and every session`);
+  console.log(`  deleted: ${n.chat} chat message(s), ${n.friendships} friendship(s) and request(s), ${n.achievements} achievement(s), and every session`);
   console.log(`The account becomes deleted-${user.id} and the name ${user.username} is freed. There is no undo.`);
 
   const answer = await ask(`Type ${user.username} to delete it: `);
@@ -95,6 +95,7 @@ async function main() {
     queries.releaseTableSeatsOf.run({ id: user.id });
     queries.deleteChatOf.run({ id: user.id });
     queries.deleteFriendshipsOf.run({ id: user.id });
+    queries.deleteAchievementsOf.run({ id: user.id });
     const ended = hasSessions
       ? db.prepare("DELETE FROM sessions WHERE json_extract(sess, '$.userId') = ?").run(user.id).changes
       : 0;

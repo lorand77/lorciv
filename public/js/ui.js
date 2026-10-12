@@ -108,6 +108,7 @@ const socket = connectSocket({
 socket.on('game:state', applyState);
 socket.on('chat:message', (m) => { if (m.gameId === GAME_ID) appendChat(m); });
 socket.on('turn:yours', (info) => { if (info.gameId === GAME_ID) announceTurn(); });
+socket.on('achievements:earned', (list) => AchievementToast.show(list));
 
 function setConn(text) {
     const el = document.getElementById('conn-status');

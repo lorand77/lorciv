@@ -94,6 +94,10 @@ under `src/game/` or `src/shared/`.
   loaded from another host. A test scans `public/*.html` for them.
 - `src/shared/*.js` runs in two runtimes: keep the UMD tail at the bottom and
   use no Node-only or DOM-only APIs.
+- A change that makes the same actions on the same seed play out differently
+  (combat, production, the AI, map generation) must bump `RULES_VERSION` in
+  `src/shared/game.js`, or replays of older games break: see "Rules versions"
+  in `docs/design.md`.
 - Catalogues (difficulties, turn-time presets, action names) are allowlists in
   `src/shared/`. Add entries there, not in ad-hoc lists elsewhere.
 - Native modules need a rebuild after `npm install` because `ignore-scripts` is

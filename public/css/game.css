@@ -311,6 +311,9 @@ button.danger {
 /* ---- Whose turn it is, and the connection ---- */
 #status-line { font-size: 12px; color: #9fb3c8; margin-bottom: 6px; min-height: 16px; }
 #status-line.mine { color: #6ed48a; font-weight: 600; }
+/* The replay page: why only the final position is shown. */
+#replay-note { font-size: 12px; color: #e8d48b; line-height: 1.4; margin-top: 4px; }
+#replay-note[hidden] { display: none; }
 #conn-status { font-size: 11px; color: #ff9f6e; margin-bottom: 6px; }
 #end-turn-btn:disabled { opacity: 0.5; }
 

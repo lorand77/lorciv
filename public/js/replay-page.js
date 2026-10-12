@@ -3,6 +3,12 @@
 // The replay page: a game's states rebuilt in the browser from its seed and
 // its recorded actions (src/shared/replay.js), shown step by step on the same
 // canvas as the game. Nothing here talks to the game; it only reads.
+//
+// A replay is only as good as the rules it runs under. A game recorded under
+// other rules (setup.rules), or one that does not end exactly where the
+// stored game did (an action refused on the way, or a game from before rules
+// versions that quietly plays out differently), is not shown step by step:
+// the page shows its final position, which the server stored, and says why.
 
 (function () {
     const SIDEBAR_W = 272;
@@ -31,7 +37,8 @@
 
     function status(text) { $('status-line').textContent = text; }
 
-    // Rebuild in slices so the page stays responsive on a long game.
+    // Rebuild in slices so the page stays responsive on a long game. `done`
+    // gets the refused action, if any, and the rebuilt game.
     function build(record, done) {
         const game = replayStart(record.setup);
         const seats = record.setup.cpuFlags.map(cpu => ({ kind: cpu ? 'ai' : 'human', missedTurns: 0 }));
@@ -44,17 +51,23 @@
             for (; i < until; i++) {
                 const rec = record.actions[i];
                 const res = replayStep(game, seats, rec);
-                if (!res.ok) {
-                    status(`The record stops making sense at action ${rec.seq} (${res.error}).`);
-                    return done();
-                }
+                if (!res.ok) return done(rec, game);
                 states.push(serializeGame(game));
                 labels.push(describeStep(rec, PLAYER_NAMES[rec.seat]));
             }
             $('replay-progress').textContent = i < total ? `Rebuilding… ${i}/${total}` : '';
-            if (i < total) setTimeout(slice, 0); else done();
+            if (i < total) setTimeout(slice, 0); else done(null, game);
         }
         slice();
+    }
+
+    // All that can be shown of a game the replay cannot rebuild.
+    function finalOnly(why) {
+        states = [record.final];
+        labels = ['Final position'];
+        const note = $('replay-note');
+        note.textContent = why + ' Only its final position can be shown.';
+        note.hidden = false;
     }
 
     function show(i) {
@@ -165,10 +178,23 @@
         })
         .then((data) => {
             record = data;
-            status('Rebuilding the game…');
-            build(record, () => {
+            const ready = () => {
+                $('replay-progress').textContent = '';
                 $('step').max = String(states.length - 1);
                 show(states.length - 1);
+            };
+            if (!rulesAllow(record.setup)) {
+                finalOnly('This game was played under an earlier version of the rules.');
+                return ready();
+            }
+            status('Rebuilding the game…');
+            build(record, (refused, game) => {
+                if (refused) {
+                    finalOnly(`This game was played under earlier rules: its action ${refused.seq} no longer fits them.`);
+                } else if (!endsOn(game, record.final)) {
+                    finalOnly('This game was played under earlier rules and plays out differently today.');
+                }
+                ready();
             });
         })
         .catch((err) => status(err.message));

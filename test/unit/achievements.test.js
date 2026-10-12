@@ -3,8 +3,8 @@
 // Achievements without a server: the catalogue holds together, the engine's
 // observer reports combat as it happens without changing the game, the
 // tracker turns events and states into feats for the seats a person plays,
-// and analyzeGame replays a record and refuses one that does not end where
-// the stored game did.
+// and analyzeGame replays a record and refuses one of other rules or one
+// that does not end where the stored game did.
 
 const { describe, test } = require("node:test");
 const assert = require("node:assert/strict");
@@ -13,7 +13,7 @@ const {
 } = require("../../src/shared/achievements");
 const { UNIT_DEFS, TECH_DEFS, BUILDING_DEFS, RESOURCES } = require("../../src/shared/state");
 const { DIFFICULTIES } = require("../../src/shared/settings");
-const { Game } = require("../../src/shared/game");
+const { Game, RULES_VERSION } = require("../../src/shared/game");
 const { runCpuTurns } = require("../../src/shared/ai");
 const { serializeGame } = require("../../src/shared/snapshot");
 const { replayStart, replayStep } = require("../../src/shared/replay");
@@ -210,5 +210,7 @@ describe("analyzeGame", () => {
     assert.deepEqual(analyzeGame({ ...r, snapshot: JSON.stringify(moved) }), { ok: false, error: "mismatch" });
     const bad = [...r.actions, { seq: 5, seat: 0, action: { type: "fortify", unitId: 99999 } }];
     assert.deepEqual(analyzeGame({ ...r, actions: bad }), { ok: false, error: "refused", seq: 5 });
+    const later = { ...r.setup, rules: RULES_VERSION + 1 };
+    assert.deepEqual(analyzeGame({ ...r, setup: later }), { ok: false, error: "rules" });
   });
 });

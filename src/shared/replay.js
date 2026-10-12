@@ -15,11 +15,37 @@ if (typeof module !== "undefined" && module.exports) {
         require("./actions"), require("./settings"), require("./snapshot"));
 }
 
+// Whether today's engine may replay a game set up this way. A game recorded
+// under other rules may not: its actions would play out differently and stop
+// making sense, or worse, quietly make a different game. One from before
+// rules versions existed (no `rules`) is tried, and only its end can tell
+// (endsOn).
+function rulesAllow(setup) {
+    return setup.rules == null || setup.rules === RULES_VERSION;
+}
+
+// Whether a replayed game ended exactly on `final`, the snapshot the server
+// stored when the game ended. Compared as JSON values, whatever the order of
+// their keys.
+function endsOn(game, final) {
+    return sameJson(JSON.parse(JSON.stringify(serializeGame(game))), final);
+}
+
+function sameJson(a, b) {
+    if (a === b) return true;
+    if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    const keys = Object.keys(a);
+    if (keys.length !== Object.keys(b).length) return false;
+    return keys.every(k => Object.hasOwn(b, k) && sameJson(a[k], b[k]));
+}
+
 // The game as it was handed to its first human: AI seats before the first
 // human seat have already played (rooms.startGame does the same). An
 // `observer` (Game.observer) sees the game from its first move.
 function replayStart(setup, observer = null) {
-    const game = new Game({ seed: setup.seed, cpuFlags: setup.cpuFlags, difficultyFlags: setup.difficultyFlags });
+    const game = new Game({ seed: setup.seed, cpuFlags: setup.cpuFlags, difficultyFlags: setup.difficultyFlags,
+                            rules: setup.rules ?? null });
     game.observer = observer;
     runCpuTurns(game);
     return game;
@@ -72,8 +98,11 @@ function describeStep(rec, civName) {
 
 // Every state of a game, as snapshots: states[0] is the start, states[i] the
 // state after action i. `record` is what GET /api/games/:id/replay returns.
-// Stops at the first action the rules refuse and reports it in `error`.
+// Stops at the first action the rules refuse and reports it in `error`; a
+// record of other rules gives no states and `error: "rules"`, and one that
+// ends anywhere but on `record.final` (when given) `error: "mismatch"`.
 function replayAll(record) {
+    if (!rulesAllow(record.setup)) return { states: [], labels: [], error: { error: "rules" } };
     const game = replayStart(record.setup);
     const seats = record.setup.cpuFlags.map(cpu => ({ kind: cpu ? "ai" : "human", missedTurns: 0 }));
     const states = [serializeGame(game)];
@@ -85,9 +114,10 @@ function replayAll(record) {
         states.push(serializeGame(game));
         labels.push(describeStep(rec, PLAYER_NAMES[rec.seat]));
     }
+    if (!error && record.final && !endsOn(game, record.final)) error = { error: "mismatch" };
     return { states, labels, error };
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { replayStart, replayStep, describeStep, replayAll };
+    module.exports = { rulesAllow, endsOn, replayStart, replayStep, describeStep, replayAll };
 }

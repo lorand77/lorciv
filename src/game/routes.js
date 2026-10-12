@@ -128,7 +128,9 @@ router.get("/:id", (req, res) => {
 });
 
 // Everything the replay page needs to rebuild a game: the setup the engine
-// started from (kept in every snapshot) and the recorded actions. Tables have
+// started from (kept in every snapshot), the recorded actions, and the final
+// snapshot, which a faithful replay ends on exactly and which is all that can
+// be shown of a game the rules have since changed under. Tables have
 // no snapshot and nothing to replay. A game still being played has none
 // either: its history, step by step, is something a player could study
 // against the people still playing it.
@@ -140,6 +142,7 @@ router.get("/:id/replay", (req, res) => {
   return res.json({
     ...withMine(row, req.session.userId),
     setup: JSON.parse(row.snapshot).setup,
+    final: JSON.parse(row.snapshot),
     actions: queries.listActions.all(id).map((a) => ({ seq: a.seq, seat: a.seat, action: JSON.parse(a.action), at: a.created_at })),
   });
 });

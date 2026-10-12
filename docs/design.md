@@ -291,7 +291,7 @@ Events:
   (`error`). Never the text.
 - **Achievements:** `achievements.earned` (`user`, `name`, `game`, `keys`:
   what one game newly earned one person, a tier as `key:tier`),
-  `achievements.replay_failed` (`warn`, `game`, `error=refused|mismatch|threw|worker`,
+  `achievements.replay_failed` (`warn`, `game`, `error=rules|refused|mismatch|threw|worker`,
   `seq`: the game was awarded without its replay), `achievements.failed`
   (`error`, `game`, `err`: the worker died, or awarding threw and the game is
   left for the next boot).
@@ -439,7 +439,7 @@ and made the changes a server needs.
 | `snapshot.js` | `serializeGame`, `deserializeGame`, format version 2 | from the old save code, extended |
 | `settings.js` | the allowlists: difficulties, turn times, action names | new |
 | `actions.js` | `applyAction`, the one validator for player actions | new |
-| `replay.js` | `replayAll`: a game's states rebuilt from its seed and action rows | new (M5) |
+| `replay.js` | `replayAll`: a game's states rebuilt from its seed and action rows; `rulesAllow`, `endsOn`: whether a replay is faithful | new (M5) |
 | `achievements.js` | the achievement catalogue: names, icons, groups, thresholds | new (M5) |
 
 The canvas renderer that used to share `hex.js` is `public/js/renderer.js`,
@@ -585,6 +585,17 @@ So two games with the same seed and the same actions are identical, and a
 game resumed from any snapshot continues exactly as the unresumed one would.
 `test/unit/engine.determinism.test.js` checks both.
 
+**Rules versions.** Determinism holds only under the same rules. A change to
+combat, production, the AI or map generation makes the same actions play
+out differently, so a game recorded before it can no longer be replayed:
+its combat goes another way, and soon a recorded action no longer fits, or
+the replay plays on and quietly shows a game that never happened. The rules
+changes of 2026-10-11 did exactly that to every game played before them.
+So `game.js` has `RULES_VERSION`, bumped with any such change, and every new
+game records it in `setup.rules` (`new Game({ rules })`: today's by default,
+the saved one when rebuilt from a snapshot or a record, null for a game from
+before versions). See "Replays" for what is done with it.
+
 ### `actions.js`: the one validator
 
 `applyAction(game, seat, action)` returns `{ ok: true, message }` or
@@ -623,7 +634,7 @@ Format version 2, the old save format plus what a resumed game needs:
 
 ```
 { version: 2,
-  setup: { seed, cpuFlags, difficultyFlags },          // the map regenerates from the seed
+  setup: { seed, cpuFlags, difficultyFlags, rules },   // the map regenerates from the seed
   game:  { turn, currentPlayer, winner, nextId, rngState, scoreHistory, aiState,
            civs: [{ playerIndex, isCpu, gold, science, culture, currentResearch,
                     techsResearched, isEliminated, pendingMessages, researchJustCompleted,
@@ -632,7 +643,9 @@ Format version 2, the old save format plus what a resumed game needs:
 ```
 
 `isCpu` is saved per civ as well as in `setup`, because a seat can be handed
-to the AI mid-game. `serializeGame(game)` and `deserializeGame(obj)`;
+to the AI mid-game. `setup.rules` is the rules version the game was started
+under (`RULES_VERSION` in `game.js`); a game from before versions existed
+(2026-10-12) has none, and a snapshot keeps it that way. `serializeGame(game)` and `deserializeGame(obj)`;
 deserialize throws on any other version. The old localStorage and file
 download/upload functions are gone: from M2 the server holds every save.
 Measured on a whole AI-only game: 6 KB at turn 25, 19 KB at turn 125. During
@@ -928,12 +941,23 @@ victory is checked, unless no human is left (no human seat, or none whose
 civ is still in the game), in which case the server abandoned the game and
 the replay stops there too. `replayAll(record)` returns
 every state as a snapshot and a one-line label per step, or the first action
-the rules refuse, which would mean the record is corrupt.
+the rules refuse.
+
+A replay is trusted only when it is faithful. `rulesAllow(setup)` refuses a
+game recorded under other rules outright; a game from before rules versions
+is tried. `endsOn(game, final)` then checks that the replay ended exactly on
+the snapshot the server stored when the game ended (compared as JSON values,
+whatever the key order), which the replay route sends as `final`. A game that
+fails either, or has an action refused on the way, is not shown step by
+step: the page shows its final position, the one thing known to be true, with
+a note saying it was played under earlier rules. Without that check an old
+game showed its first few moves and stopped, its explanation overwritten by
+the status line, or, worse, played on into a game that never happened.
 `test/integration/replay.test.js` plays a two-human game with a timeout, a
 takeover and a leave through the server and checks that the replay reproduces
 every stored snapshot exactly: the determinism of the engine, tested on a real
-game. `GET /api/games/:id/replay` returns the setup and the actions (404 for a
-table, which has nothing to replay; 403 for a game still being played, whose
+game. `GET /api/games/:id/replay` returns the setup, the actions and the
+final snapshot (404 for a table, which has nothing to replay; 403 for a game still being played, whose
 step-by-step history a player could study against the people still playing
 it); `replay.html` (`replay-page.js`) rebuilds
 the states in the browser in slices, so a long game does not freeze the page,
@@ -1048,8 +1072,9 @@ stands every building.
   counts each seat's captures. Replaying re-runs every AI turn, seconds for a
   long game, so it runs in a `worker_threads` worker (`worker.js`) and the
   server's event loop, and every live game, never waits on it. The replay
-  must end exactly on the stored snapshot; one that does not (a record the
-  rules now refuse, or a game played under older rules) is logged
+  must end exactly on the stored snapshot (`endsOn`), and a game of other
+  rules is not replayed at all (`rulesAllow`); one that fails (a game played
+  under older rules) is logged
   (`achievements.replay_failed`) and the game is awarded without its replay:
   the record and the result still count, its feats and captures do not.
 - **The record.** After the game, each person's counted games up to that one

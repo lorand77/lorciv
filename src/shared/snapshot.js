@@ -6,7 +6,9 @@
 // Shared by server and browser. Format version 2: the old save-file format
 // plus unit and city ids, the AI's strategy memory, the score history and
 // the state of the game's random generator (bankruptcy draws from it, so a
-// snapshot without it would resume on a different random sequence).
+// snapshot without it would resume on a different random sequence), and
+// setup.rules, the rules version the game was played under (game.js), absent
+// for a game from before versions existed.
 // ============================================================
 
 // Node: the files this one reads as bare names, hoisted onto globalThis. In the
@@ -90,6 +92,8 @@ function serializeGame(game) {
             seed: game.setup.seed,
             cpuFlags: [...game.setup.cpuFlags],
             difficultyFlags: [...game.setup.difficultyFlags],
+            // Absent for a game from before rules versions (game.js).
+            ...(game.setup.rules != null ? { rules: game.setup.rules } : {}),
         },
         game: {
             turn: game.turn,
@@ -134,6 +138,7 @@ function deserializeGame(saveObj) {
         seed:            setup.seed,
         cpuFlags:        setup.cpuFlags,
         difficultyFlags: setup.difficultyFlags,
+        rules:           setup.rules ?? null,
     });
     _resetForLoad(game);
 

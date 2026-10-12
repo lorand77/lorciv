@@ -11,6 +11,7 @@ const { startServer, registerUser, connectSocket, emitAck, waitFor } = require("
 const { deserializeGame } = require("../../src/shared/snapshot");
 const { getReachableTiles } = require("../../src/shared/state");
 const { replayAll } = require("../../src/shared/replay");
+const { RULES_VERSION } = require("../../src/shared/game");
 const { MISSED_TURN_LIMIT } = require("../../src/shared/settings");
 const rooms = require("../../src/game/rooms");
 const queries = require("../../src/db/queries");
@@ -85,6 +86,8 @@ test("replaying the recorded actions reproduces the stored game, step by step", 
   const record = (await alice.c.get(`/api/games/${id}/replay`)).body;
   assert.deepEqual(record.setup, snapshots[0].setup);
   assert.deepEqual(record.setup.cpuFlags, [true, false, false, true]);
+  assert.equal(record.setup.rules, RULES_VERSION, "the game records the rules it was played under");
+  assert.deepEqual(record.final, snapshots.at(-1), "and the page gets the stored end to check against");
   assert.equal(record.actions.length, snapshots.length - 1);
   assert.deepEqual(record.actions.map((x) => x.action.type),
     ["move", "foundCity", "setResearch", "endTurn", "timeout", "endTurn", "timeout", "endTurn", "leave", "leave"]);

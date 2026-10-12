@@ -1,11 +1,12 @@
 "use strict";
 
 // src/shared/snapshot.js: the whole game as JSON and back, with everything a
-// resumed game needs (ids, random state, score history, AI memory, who is AI).
+// resumed game needs (ids, random state, score history, AI memory, who is AI,
+// the rules version it was played under).
 
 const { describe, test } = require("node:test");
 const assert = require("node:assert/strict");
-const { Game } = require("../../src/shared/game");
+const { Game, RULES_VERSION } = require("../../src/shared/game");
 const { runCpuTurns } = require("../../src/shared/ai");
 const { SNAPSHOT_VERSION, serializeGame, deserializeGame } = require("../../src/shared/snapshot");
 
@@ -59,7 +60,19 @@ describe("snapshot", () => {
     const g = new Game({ seed: 3 });
     assert.deepEqual(g.setup, {
       seed: 3, cpuFlags: [false, true, true, true], difficultyFlags: ["prince", "prince", "prince", "prince"],
+      rules: RULES_VERSION,
     });
+  });
+
+  test("the rules version a game was played under survives a save, and so does having none", () => {
+    const now = serializeGame(new Game({ seed: 3 }));
+    assert.equal(now.setup.rules, RULES_VERSION);
+    const older = serializeGame(new Game({ seed: 3, rules: RULES_VERSION - 1 }));
+    assert.equal(serializeGame(deserializeGame(older)).setup.rules, RULES_VERSION - 1);
+    // A game from before versions existed: no rules field, before or after.
+    const legacy = serializeGame(new Game({ seed: 3, rules: null }));
+    assert.equal("rules" in legacy.setup, false);
+    assert.equal("rules" in serializeGame(deserializeGame(legacy)).setup, false);
   });
 
   test("an unknown version is refused", () => {

@@ -19,6 +19,14 @@ if (typeof module !== "undefined" && module.exports) {
 const MAP_COLS = 32;
 const MAP_ROWS = 24;
 
+// The version of the rules. Bump it with any change that makes the same
+// actions on the same seed play out differently (combat, production, AI,
+// map generation...): a replay rebuilds a game by playing its actions again,
+// which only works under the rules it was played by. Every new game records
+// the version it started under (setup.rules); games from before versions
+// existed have none (see replay.js).
+const RULES_VERSION = 1;
+
 const PLAYER_NAMES = ['Rome', 'Greece', 'The Huns', 'Babylon'];
 
 const PLAYER_COLORS = ['#dc3232', '#3264dc', '#32b432', '#dcb432'];
@@ -315,8 +323,11 @@ function computeScore(civ, game) {
 // ============================================================
 
 class Game {
+    // `rules` is the rules version to record: today's for a new game, the
+    // saved one for a game rebuilt from a snapshot or a record, null for one
+    // from before versions existed.
     constructor({ numPlayers = 4, cols = MAP_COLS, rows = MAP_ROWS, seed = 42,
-                  cpuFlags = null, difficultyFlags = null } = {}) {
+                  cpuFlags = null, difficultyFlags = null, rules = RULES_VERSION } = {}) {
         this.numPlayers    = numPlayers;
         this.cols          = cols;
         this.rows          = rows;
@@ -339,6 +350,7 @@ class Game {
         this.civs    = this._createCivs(cpuFlags, difficultyFlags);
         // What a snapshot needs to rebuild the same map and civs (snapshot.js).
         this.setup   = { seed, cpuFlags: this.civs.map(c => c.isCpu), difficultyFlags: this.civs.map(c => c.difficulty) };
+        if (rules != null) this.setup.rules = rules;
 
         this._placeStartingUnits();
     }
@@ -1110,4 +1122,4 @@ class Game {
 if (typeof module !== 'undefined' && module.exports) module.exports = { Game, computeCityYields, processProduction,
      availableTechs, canResearch, computeScore, calcDamage,
      effectiveStrength, cityCombatStrength, meleeAttack, rangedAttack, bombardCity, getItemCost, buyCost,
-      CITY_NAMES, PLAYER_NAMES, PLAYER_COLORS, DIFFICULTY_DEFS, MAP_COLS, MAP_ROWS };
+      CITY_NAMES, PLAYER_NAMES, PLAYER_COLORS, DIFFICULTY_DEFS, MAP_COLS, MAP_ROWS, RULES_VERSION };

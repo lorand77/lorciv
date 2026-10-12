@@ -12,9 +12,7 @@
 // did after taking a seat over is not the person's. Whether the game counts
 // for that person at all (the leaderboard's rule) is the caller's question.
 
-const { isDeepStrictEqual } = require("util");
-const { replayStart, replayStep } = require("../shared/replay");
-const { serializeGame } = require("../shared/snapshot");
+const { rulesAllow, endsOn, replayStart, replayStep } = require("../shared/replay");
 const { UNIT_DEFS, TECH_DEFS, BUILDING_DEFS } = require("../shared/state");
 const { ACHIEVEMENTS_BY_KEY: A } = require("../shared/achievements");
 
@@ -108,10 +106,12 @@ class Tracker {
 // Replay a game the way the server played it (src/shared/replay.js) and
 // report per seat. `record` is { setup, actions, snapshot }: the actions as
 // the replay route sends them and the game's stored snapshot (JSON), which
-// the replay must end on exactly. A record that does not replay (an action
-// refused, or a different end: a game played under older rules) reports
-// { ok: false, error } instead, and nothing it saw on the way counts.
+// the replay must end on exactly. A record that does not replay (other rules,
+// an action refused, or a different end: a game played under older rules
+// before versions existed) reports { ok: false, error } instead, and nothing
+// it saw on the way counts.
 function analyzeGame(record) {
+  if (!rulesAllow(record.setup)) return { ok: false, error: "rules" };
   const seats = record.setup.cpuFlags.map((cpu) => ({ kind: cpu ? "ai" : "human", missedTurns: 0 }));
   const tracker = new Tracker(seats);
   const game = replayStart(record.setup, (ev, g) => tracker.onEvent(ev, g));
@@ -120,8 +120,7 @@ function analyzeGame(record) {
     if (!res.ok) return { ok: false, error: "refused", seq: rec.seq };
     tracker.afterStep(game, rec);
   }
-  const end = JSON.parse(JSON.stringify(serializeGame(game)));
-  if (!isDeepStrictEqual(end, JSON.parse(record.snapshot))) return { ok: false, error: "mismatch" };
+  if (!endsOn(game, JSON.parse(record.snapshot))) return { ok: false, error: "mismatch" };
   return { ok: true, seats: tracker.result() };
 }
 

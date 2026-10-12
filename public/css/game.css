@@ -286,6 +286,8 @@ button.danger {
     color: #ffd700; font-size: 72px; font-weight: 900; letter-spacing: 4px;
     text-shadow: 0 0 40px #ffd70066;
 }
+#victory-title.defeat { color: #c84040; text-shadow: 0 0 40px #c8404066; }
+#victory-title.over   { color: #d0d0e0; text-shadow: none; }
 #victory-subtitle { font-size: 26px; font-weight: 600; }
 #victory-sep { width: 640px; height: 1px; background: #3a3a6a; margin: 2px 0; }
 #victory-graph { border: 1px solid #3a3a5a; border-radius: 4px; }

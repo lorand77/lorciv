@@ -253,6 +253,15 @@ function maybeOpenTechTree() {
 function showVictoryScreen(winnerIdx) {
     if (_victoryShown) return;
     _victoryShown = true;
+    // Victory for the winner only; defeat for the other seats, and for whoever
+    // left one; a spectator, or someone whose abandoned civ won under the AI,
+    // gets a plain game over.
+    const ours = mySeat ?? formerSeat;
+    const outcome = mySeat === winnerIdx ? 'victory'
+                  : ours !== null && ours !== winnerIdx ? 'defeat' : 'over';
+    const title = document.getElementById('victory-title');
+    title.textContent = { victory: 'VICTORY!', defeat: 'DEFEAT', over: 'GAME OVER' }[outcome];
+    title.className = outcome;
     const civ = game.civs[winnerIdx];
     document.getElementById('victory-subtitle').textContent =
         `${civ.name} achieves Domination!`;

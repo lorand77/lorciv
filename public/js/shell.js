@@ -17,7 +17,7 @@
 
 (function () {
   const ITEMS = [
-    { href: "/lobby.html", icon: "⬡", label: "Play" },
+    { href: "/lobby.html", icon: "▶", label: "Play" },
     { href: "/profile.html", icon: "👤", label: "My Profile", children: [
       { tab: "stats", icon: "📊", label: "Stats" },
       { tab: "games", icon: "📜", label: "My Games" },

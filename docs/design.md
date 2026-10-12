@@ -828,9 +828,10 @@ AI or every human civ was eliminated, the game is **aborted** (`game.abort`,
 `reason=no_humans`) rather than played out by the AI, and it is aborted before
 the AI would have played, which matters: a whole AI game takes seconds. A
 human civ eliminated by the AI mid-round stops `runCpuTurns` right there. A
-game abandoned this way counts on the leaderboard only when two or more
-people played it, as a loss for each (see "Looking back"); a solo game against
-the AI does not count.
+game abandoned this way counts on the leaderboard when two or more people
+played it, as a loss for each, or when the seat's civ was eliminated, as a
+loss for that seat even in a solo game (see "Looking back"); a solo game
+against the AI that the player walked out of does not count.
 
 ### Several humans in one game
 
@@ -874,8 +875,12 @@ A finished game counts. So does an abandoned one (aborted after it started:
 no human left in it, or the abandon sweep) that two or more people played, as
 a loss for each of them, so walking out on other people does not keep a
 defeat off the board; a seat handed to the AI keeps its user, so those who
-left are counted. A solo game abandoned does not count, nor a table cancelled
-before it started. "Played" means made a move, an action row of one's own
+left are counted. An abandoned game in which the seat's civ was eliminated
+is a loss for it too, solo or not: the server aborts a game once no human civ
+is left, so being wiped out ends it without a winner, and that is a defeat,
+not a walk-out. Elimination is read from the game's last snapshot
+(`ELIMINATED` in `queries.js`). Any other solo game abandoned does not count,
+nor a table cancelled before it started. "Played" means made a move, an action row of one's own
 other than a leave (timeouts have no user): a game someone never moved in,
 their turns running out until the AI took the seat, is no loss of theirs, and
 they do not make an abandoned game one of two people.
@@ -933,7 +938,8 @@ unknown one.
 - **Stats** (`stats.js`, `GET /api/stats` and `/api/stats/:id`,
   `src/stats/routes.js`): over the games the leaderboard counts (the shared
   `COUNTED` rule), played, won, lost, abandoned (an abandoned game counted is a
-  loss on the leaderboard; here it is shown apart) and the win rate, as tiles
+  loss on the leaderboard; here it is shown apart, unless the seat's civ was
+  eliminated, which is a loss here too) and the win rate, as tiles
   and one part-to-whole bar with a labelled key; games in progress; the same
   record by civilization (the seat) and by company: AI only, or with other
   people (`people`, the seats with a user, counts who started the game, since

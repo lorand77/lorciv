@@ -23,7 +23,8 @@ router.use(requireAuth);
 const emptyRecord = () => ({ played: 0, wins: 0, losses: 0, abandoned: 0 });
 
 // The win rate is wins over games played, as on the leaderboard: an abandoned
-// game is a game not won.
+// game is a game not won. One abandoned after the seat's civ was eliminated is
+// a loss, not an abandoned game.
 const withRate = (r) => ({ ...r, winRate: r.played ? (r.wins / r.played) * 100 : null });
 
 function statsFor(user) {
@@ -37,7 +38,7 @@ function statsFor(user) {
     const bump = (rec) => {
       rec.played++;
       if (g.won) rec.wins++;
-      else if (g.status === "aborted") rec.abandoned++;
+      else if (g.status === "aborted" && !g.eliminated) rec.abandoned++;
       else rec.losses++;
     };
     bump(total);

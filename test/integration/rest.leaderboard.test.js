@@ -1,7 +1,8 @@
 "use strict";
 
 // /api/leaderboard: every active account, ranked by wins over finished games
-// and abandoned games two or more people played (a loss each), those yet to
+// and abandoned games two or more people played (a loss each) or in which the
+// player's civ was eliminated (a loss, even solo), those yet to
 // play at 0 / 0 below the rest; a seat the AI took over does not win for the
 // person; deactivated accounts are left off.
 
@@ -112,4 +113,24 @@ test("someone who never moved has not played: no loss for them, and no game of t
   assert.equal(queries.getGameById.get(id).status, "aborted");
   const rows = (await fay.c.get("/api/leaderboard")).body;
   for (const u of [fay, gus]) assert.equal(rows.find((r) => r.id === u.user.id).games, 0, u.user.username);
+});
+
+test("a game abandoned because the player's civ was eliminated is a loss, even solo", async () => {
+  const hal = await registerUser(srv.baseUrl, "hal");
+  const abort = (id, eliminated) => db().prepare(`
+    UPDATE games SET status = 'aborted', finished_at = datetime('now'),
+      snapshot = json_set(snapshot, '$.game.civs[0].isEliminated', json(?)) WHERE id = ?
+  `).run(eliminated ? "true" : "false", id);
+  // Wiped out by the AI: the server aborts the game with no human civ left.
+  const wipedOut = await finishedGame(hal, null);
+  abort(wipedOut, true);
+  // Walked out of alone, civ still standing: not counted.
+  const walkedOut = await finishedGame(hal, null);
+  abort(walkedOut, false);
+  assert.ok(queries.getGameById.get(wipedOut).started_at, "the game had started");
+
+  const row = (await hal.c.get("/api/leaderboard")).body.find((r) => r.id === hal.user.id);
+  assert.deepEqual([row.games, row.wins], [1, 0]);
+  const { record } = (await hal.c.get("/api/stats")).body;
+  assert.deepEqual([record.played, record.wins, record.losses, record.abandoned], [1, 0, 1, 0]);
 });

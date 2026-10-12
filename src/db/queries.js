@@ -6,13 +6,19 @@
 
 const db = require("./index");
 
+// A seat `s` in a game `g` whose civ was eliminated, as of the game's last
+// snapshot (civs are indexed by seat). The server aborts a game once no human
+// civ is left in it, so being wiped out ends a game without a winner.
+const ELIMINATED = "json_extract(g.snapshot, '$.game.civs[' || s.seat || '].isEliminated') = 1";
+
 // A seat `s` in a game `g` that counts for the player's record, on the
 // leaderboard and on their profile alike. A finished game counts; so does an
 // abandoned one (aborted after it started) that two or more people played, as
 // a loss for each of them: walking out on other people is not a way to keep a
-// defeat off the board. A solo game abandoned does not count, nor a table
-// cancelled before it started. user_id stays on a seat the AI took over, so
-// those who left are counted.
+// defeat off the board. So does an abandoned game in which the seat's civ was
+// eliminated, solo or not: that is a loss, not a walk-out. Any other solo game
+// abandoned does not count, nor a table cancelled before it started. user_id
+// stays on a seat the AI took over, so those who left are counted.
 //
 // "Played" means made a move: an action row of theirs other than a leave (the
 // server's timeouts have no user). Someone who never moved, whose turns ran
@@ -21,9 +27,10 @@ const db = require("./index");
 const COUNTED = `
   (g.status = 'finished'
    OR (g.status = 'aborted' AND g.started_at IS NOT NULL
-       AND (SELECT COUNT(DISTINCT m.user_id) FROM game_actions m
-            WHERE m.game_id = g.id AND m.user_id IS NOT NULL
-              AND json_extract(m.action, '$.type') <> 'leave') >= 2))
+       AND (${ELIMINATED}
+            OR (SELECT COUNT(DISTINCT m.user_id) FROM game_actions m
+                WHERE m.game_id = g.id AND m.user_id IS NOT NULL
+                  AND json_extract(m.action, '$.type') <> 'leave') >= 2)))
   AND EXISTS (SELECT 1 FROM game_actions m
               WHERE m.game_id = g.id AND m.user_id = s.user_id
                 AND json_extract(m.action, '$.type') <> 'leave')`;
@@ -108,12 +115,14 @@ module.exports = {
 
   // --- profile stats (src/stats/routes.js) ---
   // One row per counted game of the user (the same games the leaderboard
-  // counts): the seat, whether it won, how the game ended, and how many people
-  // sat down in it. A seat keeps its user_id when the AI takes it over, and a
-  // table's seats are released before it starts, so `people` is the number
-  // who started the game.
+  // counts): the seat, whether it won, how the game ended, whether the seat's
+  // civ was eliminated in a game abandoned after, and how many people sat down
+  // in it. A seat keeps its user_id when the AI takes it over, and a table's
+  // seats are released before it starts, so `people` is the number who
+  // started the game.
   statsGames: db.prepare(`
     SELECT s.seat, g.status, CASE WHEN ${WON} THEN 1 ELSE 0 END AS won,
+           CASE WHEN g.status = 'aborted' AND ${ELIMINATED} THEN 1 ELSE 0 END AS eliminated,
            (SELECT COUNT(*) FROM game_seats o WHERE o.game_id = g.id AND o.user_id IS NOT NULL) AS people
     FROM game_seats s JOIN games g ON g.id = s.game_id
     WHERE s.user_id = ? AND ${COUNTED}

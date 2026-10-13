@@ -339,7 +339,8 @@ describe what now exists.
 - A simple leaderboard (wins).
 - Broadcast after each AI civ, with the old 100 ms pacing, if the round jump
   feels wrong.
-- Touch and small-screen layout (the renderer already handles touch input).
+- Touch and small-screen layout. Done 2026-10-13: phones get the map full
+  screen with the sidebar as a sheet; see `docs/design.md`, "The game page".
 - Delete `civ_lite-old/` (everything is ported after M2) and the `lorchess/`
   reference copy (after M4).
 

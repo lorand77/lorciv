@@ -11,8 +11,10 @@
 <canvas id="game-canvas"></canvas>
 <div id="scoreboard" class="hidden"></div>
 
+<!-- On a phone the sidebar is a sheet over the bottom of the map, as on the
+     game page: the step controls on top, More for the rest. -->
 <aside id="sidebar">
-    <div class="panel" id="head-panel">
+    <div class="panel sheet-more" id="head-panel">
         <a class="brand" href="/lobby.html">⬡ LorCiv</a>
         <a class="button-link lobby-link" href="/lobby.html">← Play</a>
         <div id="userbar"></div>
@@ -23,11 +25,11 @@
         <div id="replay-progress" class="muted"></div>
         <div id="replay-note" hidden></div>
     </div>
-    <div class="panel" id="players-panel">
+    <div class="panel sheet-more" id="players-panel">
         <div class="section-label">Players</div>
         <div id="players-list"></div>
     </div>
-    <div class="panel" id="replay-controls">
+    <div class="panel sheet-top" id="replay-controls">
         <div class="section-label">Step</div>
         <input id="step" type="range" min="0" max="0" value="0" step="1">
         <div id="step-label" class="muted"></div>
@@ -37,6 +39,7 @@
             <button id="play-btn" title="Play (space)">▶ Play</button>
             <button id="next-btn" title="Forward one (→)">▶</button>
             <button id="last-btn" title="End">⏭</button>
+            <button id="sheet-btn" class="compact-only" title="Players and links">More</button>
         </div>
         <div class="stat-row">Speed
             <select id="speed">
@@ -46,8 +49,8 @@
             </select>
         </div>
     </div>
-    <div style="flex:1"></div>
-    <div class="panel">
+    <div class="spacer"></div>
+    <div class="panel sheet-more">
         <a class="button-link" id="game-link" href="#">Open the game</a>
     </div>
 </aside>

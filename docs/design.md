@@ -783,7 +783,8 @@ ack would be dropped and leave the page locked.
 - **Victory** shows the original overlay with the score graph from the
   snapshot's `scoreHistory`, and a button back to the lobby.
 - **Keys:** the original's shortcuts (Enter ends the turn, F founds, M/A/P
-  start an improvement, K/H/U, S and T for the overlays, arrows pan), ignored
+  start an improvement, K/H/U, S and T for the overlays, also the Stats and
+  Tech buttons, arrows pan), ignored
   while typing, with Ctrl, Cmd or Alt held, and for Enter on a focused button
   or link, which presses that instead; C centers the map. A held Enter ends
   one turn, not one per repeat, and End Turn is held for a second when a turn
@@ -800,6 +801,23 @@ ack would be dropped and leave the page locked.
   server initiated (logout in another tab, an expired session, deactivation)
   is one Socket.IO does not recover from by itself: `net.js` asks `/api/me`,
   goes to login on a 401 and reconnects otherwise, for the lobby as well.
+- **Phones and tablets.** The map takes touch as it takes a mouse: drag pans,
+  pinch zooms, a tap selects, moves or attacks and shows the tile's details
+  (there is no hover). Every key has a button, the tech tree included (Tech,
+  and a Close button in the overlay). At 700px wide and below, the line the
+  other pages use, the map takes the whole screen and the sidebar becomes a
+  sheet over its bottom (`game.css`, "Phones"; the replay page the same):
+  folded it shows the buttons and End Turn, kept at its top as it scrolls,
+  whose turn it is and what is selected; More unfolds the civ's numbers,
+  players, chat and the way back to Play, and wears a dot when a chat message
+  came in while folded. Center puts the capital in the middle of the map left
+  above the sheet. On a phone the tech tree keeps cards big enough to tap and
+  scrolls, and the stats table and the victory screen fit the width. Buttons
+  are larger, a quick second tap does not zoom, and the chat field is 16px so
+  iOS does not zoom in on it. A tablet, and a phone on its side, keep the
+  desktop layout. Turn notifications need the Notification API, which iOS
+  Safari offers only to a site added to the Home Screen as a web app; LorCiv
+  is not one, so on an iPhone or iPad the tab title is the signal.
 - **Gone from the original:** the setup screen, quicksave, export and import
   (the server holds every game), and the local AI loop.
 
@@ -1106,7 +1124,7 @@ count, a game that does not replay, and the backfill at boot.
 
 Left of the plan's polish (M5, `docs/plan.md`): a finished-game summary page
 (the victory screen on the game page serves today), broadcasting after each AI
-civ if the round jump feels wrong, touch and small-screen layout, and deleting
+civ if the round jump feels wrong, and deleting
 `civ_lite-old/` and the `lorchess/` reference copy once the game page has been
 checked against the original. From the profile work: inviting a friend into a
 seat of a table you host. From the achievements: social ones (finishing games

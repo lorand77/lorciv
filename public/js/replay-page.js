@@ -14,9 +14,11 @@
     const SIDEBAR_W = 272;
     const canvas = document.getElementById('game-canvas');
     canvas.style.touchAction = 'none';
+    // On a phone the sidebar is a sheet over the map (game.css, "Phones").
+    const COMPACT = window.matchMedia('(max-width: 700px)');
     function sizeCanvas() {
         const dpr = window.devicePixelRatio || 1;
-        const w = window.innerWidth - SIDEBAR_W, h = window.innerHeight;
+        const w = window.innerWidth - (COMPACT.matches ? 0 : SIDEBAR_W), h = window.innerHeight;
         canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
         canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
     }
@@ -154,6 +156,10 @@
     $('next-btn').addEventListener('click', () => { stop(); show(step + 1); });
     $('last-btn').addEventListener('click', () => { stop(); show(states.length - 1); });
     $('play-btn').addEventListener('click', play);
+    $('sheet-btn').addEventListener('click', (e) => {
+        const open = document.body.classList.toggle('sheet-open');
+        e.currentTarget.textContent = open ? 'Less' : 'More';
+    });
     $('speed').addEventListener('change', () => {
         // Give the arrow keys back to the steps; a focused menu would take them.
         $('speed').blur();

@@ -41,12 +41,16 @@
         <div id="tech-overlay-title">Technology Tree</div>
         <canvas id="tech-tree-canvas"></canvas>
         <div id="tech-overlay-hint">Tap an available tech to research it · Tap outside, T, or Escape to close</div>
+        <button id="tech-close">Close</button>
     </div>
 </div>
 
+<!-- On a phone (game.css, max-width 700px) the sidebar is a sheet over the
+     bottom of the map: .sheet-top stays at its top, .sheet-more shows only
+     once More opens it. -->
 <aside id="sidebar">
 
-    <div class="panel" id="head-panel">
+    <div class="panel sheet-more" id="head-panel">
         <a class="brand" href="/lobby.html">⬡ LorCiv</a>
         <a class="button-link lobby-link" href="/lobby.html" title="Go to the Play page. Your seat stays yours and the turn clock keeps running; come back from your games list.">← Play</a>
         <div id="userbar"></div>
@@ -56,21 +60,23 @@
         <div id="turn-label">Turn 1</div>
         <div id="status-line"></div>
         <div id="conn-status" class="hidden"></div>
-        <div class="stat-row">
-            Gold <span id="stat-gold">0</span>
-        </div>
-        <div class="stat-row">
-            Science <span id="stat-sci">0</span>
-        </div>
-        <div class="stat-row">
-            Culture <span id="stat-culture">0</span>
-        </div>
-        <div style="margin-top:6px">
+        <div class="sheet-more">
             <div class="stat-row">
-                Research: <span id="stat-research">—</span>
+                Gold <span id="stat-gold">0</span>
             </div>
-            <div class="pbar-wrap">
-                <div class="pbar-fill" id="research-bar" style="width:0%;background:#5080d0"></div>
+            <div class="stat-row">
+                Science <span id="stat-sci">0</span>
+            </div>
+            <div class="stat-row">
+                Culture <span id="stat-culture">0</span>
+            </div>
+            <div style="margin-top:6px">
+                <div class="stat-row">
+                    Research: <span id="stat-research">—</span>
+                </div>
+                <div class="pbar-wrap">
+                    <div class="pbar-fill" id="research-bar" style="width:0%;background:#5080d0"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -117,12 +123,12 @@
         <div id="msg-text"></div>
     </div>
 
-    <div class="panel" id="players-panel">
+    <div class="panel sheet-more" id="players-panel">
         <div class="section-label">Players</div>
         <div id="players-list"></div>
     </div>
 
-    <div class="panel" id="chat-panel">
+    <div class="panel sheet-more" id="chat-panel">
         <div class="section-label">Chat</div>
         <div id="chat-log"></div>
         <form id="chat-form" autocomplete="off">
@@ -130,12 +136,14 @@
         </form>
     </div>
 
-    <div style="flex:1"></div>
+    <div class="spacer"></div>
 
-    <div class="panel">
+    <div class="panel sheet-top">
         <div class="btn-row">
-            <button id="stats-btn">Stats</button>
+            <button id="tech-btn" title="The technology tree (T)">Tech</button>
+            <button id="stats-btn" title="Every civ's numbers side by side (S)">Stats</button>
             <button id="center-btn" title="Center the map on your capital (C)">Center</button>
+            <button id="sheet-btn" class="compact-only" title="Stats, players, chat and the way back to Play">More</button>
             <button id="leave-btn" class="danger hidden" title="Hand your seat to the AI for the rest of the game">Leave</button>
         </div>
         <button id="end-turn-btn" disabled>Waiting…</button>

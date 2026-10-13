@@ -1,13 +1,20 @@
-/* LorCiv game page. From the original Civ Lite stylesheet; the setup screen
-   and the save/export row are gone (the server holds every game now). */
+/* LorCiv game and replay pages. From the original Civ Lite stylesheet; the
+   setup screen and the save/export row are gone (the server holds every game
+   now). On a phone (max-width 700px, the same line as styles.css) the map
+   takes the whole screen and the sidebar becomes a sheet over its bottom:
+   see "Phones" at the end. */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
     background: #0a0a1a;
     overflow: hidden;
+    /* No pull-to-refresh or rubber-banding: a drag is for the map. */
+    overscroll-behavior: none;
     font-family: 'Segoe UI', Tahoma, sans-serif;
     display: flex;
     height: 100vh;
+    /* The visible height on mobile browsers, whose toolbars come and go. */
+    height: 100dvh;
     color: #ccc;
 }
 
@@ -76,6 +83,8 @@ body {
     padding: 10px 12px;
     border-bottom: 1px solid #1e2840;
 }
+/* Pushes the last panel (End Turn, the replay's link) to the bottom. */
+#sidebar .spacer { flex: 1; }
 
 .panel-title {
     font-size: 13px;
@@ -134,6 +143,8 @@ button {
     cursor: pointer;
     text-align: center;
     transition: background 0.15s;
+    /* A quick second tap is two taps, not a zoom. */
+    touch-action: manipulation;
 }
 button:hover:not(:disabled) { background: #2a3f5a; color: #fff; }
 button:disabled { opacity: 0.35; cursor: default; }
@@ -233,15 +244,17 @@ button.danger {
 /* Scrollable list inside panel */
 .scroll-list { max-height: 180px; overflow-y: auto; }
 
-/* Tech tree overlay */
+/* Tech tree overlay. The inner box is centred by auto margins rather than
+   by the flex container, so a tree wider than a phone scrolls from its left
+   edge instead of being cut off on both sides. */
 #tech-overlay {
     position: fixed; inset: 0; z-index: 200;
     background: rgba(5,8,20,0.96);
-    display: flex; align-items: center; justify-content: center;
-    flex-direction: column;
+    display: flex;
+    overflow: auto;
 }
 #tech-overlay.hidden { display: none; }
-#tech-overlay-inner { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+#tech-overlay-inner { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: auto; padding: 16px; }
 #tech-overlay-title { color: #e8d48b; font-size: 18px; font-weight: 700; letter-spacing: 1px; }
 #tech-overlay-hint { color: #5a6a80; font-size: 12px; }
 #tech-tree-canvas { border: 1px solid #2a3040; border-radius: 4px; cursor: pointer; }
@@ -274,14 +287,15 @@ button.danger {
 .stats-leader { background: rgba(255,200,0,0.14) !important; }
 #stats-hint { color: #646478; font-size: 11px; text-align: right; padding: 5px 10px; }
 
-/* Victory overlay */
+/* Victory overlay (centred like the tech tree, so a short screen scrolls) */
 #victory-overlay {
     position: fixed; inset: 0; z-index: 300;
     background: rgba(0,0,0,0.88);
-    display: flex; align-items: center; justify-content: center;
+    display: flex;
+    overflow: auto;
 }
 #victory-overlay.hidden { display: none; }
-#victory-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+#victory-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; margin: auto; padding: 16px; }
 #victory-title {
     color: #ffd700; font-size: 72px; font-weight: 900; letter-spacing: 4px;
     text-shadow: 0 0 40px #ffd70066;
@@ -289,7 +303,7 @@ button.danger {
 #victory-title.defeat { color: #c84040; text-shadow: 0 0 40px #c8404066; }
 #victory-title.over   { color: #d0d0e0; text-shadow: none; }
 #victory-subtitle { font-size: 26px; font-weight: 600; }
-#victory-sep { width: 640px; height: 1px; background: #3a3a6a; margin: 2px 0; }
+#victory-sep { width: 640px; max-width: 90vw; height: 1px; background: #3a3a6a; margin: 2px 0; }
 #victory-graph { border: 1px solid #3a3a5a; border-radius: 4px; }
 #victory-lobby {
     margin-top: 6px; padding: 10px 36px; font-size: 16px;
@@ -347,3 +361,62 @@ button.danger {
 #replay-controls select { background: #1e2d40; color: #ccc; border: 1px solid #2e4060; border-radius: 3px; font-size: 12px; }
 .button-link { display: block; text-align: center; padding: 7px; border-radius: 4px; background: #1e2d40; border: 1px solid #2e4060; color: #ccc; text-decoration: none; font-size: 12px; }
 .button-link:hover { background: #2a3f5a; color: #fff; }
+
+/* ---- Phones ----
+   The map takes the whole screen (ui.js and replay-page.js size the canvas
+   to match) and the sidebar is a sheet over its bottom. Folded, it shows the
+   buttons and End Turn (.sheet-top, kept at its top while it scrolls), whose
+   turn it is, and what is selected; More unfolds the rest (.sheet-more):
+   the civ's numbers, players, chat and the way back to Play. */
+.compact-only { display: none; }
+#sheet-btn.unread::after { content: " •"; color: #e8d48b; }
+
+@media (max-width: 700px) {
+    body { display: block; }
+    #game-canvas { position: fixed; inset: 0; }
+    #sidebar {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
+        width: auto;
+        max-height: 50vh; max-height: 50dvh;
+        border-left: none;
+        border-top: 1px solid #2a3040;
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.5);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    body.sheet-open #sidebar { max-height: 80vh; max-height: 80dvh; }
+    body:not(.sheet-open) #sidebar .sheet-more { display: none; }
+    #sidebar .spacer { display: none; }
+    .sheet-top { order: -1; position: sticky; top: 0; z-index: 1; background: #111827; }
+    .compact-only { display: inline-block; }
+
+    /* Fingers, not a mouse pointer: bigger targets. */
+    .panel { padding: 8px 12px; }
+    button { padding: 9px 8px; font-size: 13px; }
+    #end-turn-btn { padding: 12px; font-size: 15px; }
+    #replay-controls .btn-row button { padding: 9px 4px; }
+    #replay-controls select { font-size: 16px; }
+    .prod-item { padding: 9px 8px; font-size: 13px; }
+    .prod-item .buy-btn { padding: 6px 10px; font-size: 12px; }
+    /* The sheet scrolls; a list scrolling inside it would fight it. */
+    .scroll-list { max-height: none; }
+    /* Under 16px, iOS zooms the page in when the field is focused. */
+    #chat-input { font-size: 16px; padding: 6px 8px; }
+    #head-panel .lobby-link { padding: 6px 10px; font-size: 13px; }
+
+    #scoreboard { top: 8px; right: 8px; width: 150px; padding: 5px 7px 6px; font-size: 11px; }
+    #scoreboard .sb-title { font-size: 11px; padding-bottom: 3px; margin-bottom: 3px; }
+    #scoreboard .sb-row { padding: 1px 0; gap: 6px; }
+
+    #stats-inner { min-width: 0; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow: auto; }
+    #stats-table th, #stats-table td { padding: 5px 8px; font-size: 12px; }
+    #stats-table th:first-child { min-width: 0; }
+
+    #victory-title { font-size: 44px; letter-spacing: 2px; }
+    #victory-subtitle { font-size: 18px; text-align: center; }
+}
+
+/* A phone on its side: a short screen, so a smaller victory title. */
+@media (max-height: 500px) {
+    #victory-title { font-size: 40px; }
+    #victory-subtitle { font-size: 18px; }
+}

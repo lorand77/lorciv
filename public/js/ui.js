@@ -39,9 +39,13 @@ const TREE_W = 760, TREE_H = 410;
 const canvas  = document.getElementById('game-canvas');
 canvas.style.touchAction = 'none';
 
+// On a phone the sidebar is a sheet over the map (game.css, "Phones"), so the
+// map has the whole width; elsewhere it shares it with the sidebar.
+const COMPACT = window.matchMedia('(max-width: 700px)');
+
 function _sizeGameCanvas() {
     const dpr = window.devicePixelRatio || 1;
-    const w = window.innerWidth - SIDEBAR_W;
+    const w = window.innerWidth - (COMPACT.matches ? 0 : SIDEBAR_W);
     const h = window.innerHeight;
     canvas.style.width  = w + 'px';
     canvas.style.height = h + 'px';
@@ -106,7 +110,12 @@ const socket = connectSocket({
     },
 });
 socket.on('game:state', applyState);
-socket.on('chat:message', (m) => { if (m.gameId === GAME_ID) appendChat(m); });
+socket.on('chat:message', (m) => {
+    if (m.gameId !== GAME_ID) return;
+    appendChat(m);
+    // On a phone the chat is folded away under More: mark that there is news.
+    if (!document.body.classList.contains('sheet-open')) document.getElementById('sheet-btn').classList.add('unread');
+});
 socket.on('turn:yours', (info) => { if (info.gameId === GAME_ID) announceTurn(); });
 socket.on('achievements:earned', (list) => AchievementToast.show(list));
 
@@ -220,7 +229,13 @@ function applyState(state) {
 function centerOnHome() {
     const civ = viewCiv();
     const spot = civ.cities.find(c => c === civ.originalCapital) ?? civ.cities[0] ?? civ.units[0];
-    if (spot) renderer.centerOn(spot.q, spot.r);
+    if (!spot) return;
+    renderer.centerOn(spot.q, spot.r);
+    // On a phone the sheet covers the bottom of the map: centre on what shows.
+    if (COMPACT.matches) {
+        renderer.offsetY -= document.getElementById('sidebar').offsetHeight / 2;
+        renderer.draw();
+    }
 }
 
 // Keep the selection across snapshots when it still makes sense: our unit
@@ -948,7 +963,9 @@ function openTechTree() {
     overlay.classList.remove('hidden');
     const tc = document.getElementById('tech-tree-canvas');
     const maxW = Math.min(window.innerWidth - 40, TREE_W * 2);
-    const scale = Math.min(1.6, maxW / TREE_W);
+    // Never so small that a card cannot be read or tapped: on a phone the
+    // overlay scrolls instead.
+    const scale = Math.max(0.8, Math.min(1.6, maxW / TREE_W));
     const dpr = window.devicePixelRatio || 1;
     const displayW = Math.round(TREE_W * scale);
     const displayH = Math.round(TREE_H * scale);
@@ -1110,6 +1127,20 @@ function clearMessages() {
 document.getElementById('end-turn-btn').addEventListener('click', () => send({ type: 'endTurn' }));
 
 document.getElementById('center-btn').addEventListener('click', () => { if (game) centerOnHome(); });
+
+document.getElementById('tech-btn').addEventListener('click', () => {
+    const overlay = document.getElementById('tech-overlay');
+    if (overlay.classList.contains('hidden')) openTechTree();
+    else closeTechTree();
+});
+document.getElementById('tech-close').addEventListener('click', closeTechTree);
+
+// Phones: More unfolds the sheet to the civ's numbers, players and chat.
+document.getElementById('sheet-btn').addEventListener('click', (e) => {
+    const open = document.body.classList.toggle('sheet-open');
+    e.currentTarget.textContent = open ? 'Less' : 'More';
+    e.currentTarget.classList.remove('unread');
+});
 
 document.getElementById('stats-btn').addEventListener('click', () => {
     const so = document.getElementById('stats-overlay');

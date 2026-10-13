@@ -48,7 +48,7 @@ const MESSAGE = {
   no_such_game: "No such game.", no_such_seat: "No such seat.", not_lobby: "That game has started.",
   seat_taken: "That seat is taken.", already_seated: "You already have a seat in this game.",
   not_host: "Only the host can do that.", not_yours: "That is not your seat.",
-  host: "The host cannot leave; cancel the table instead.",
+  host: "The host cannot leave; cancel the room instead.",
   in_progress: "The replay opens when the game is over.",
 };
 const MAX_SEED = 0xFFFFFFFF;

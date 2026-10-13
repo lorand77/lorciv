@@ -94,13 +94,13 @@
           if (sel.value === "you") return playAs(i);
           if (sel.value === "open") seatKind[i] = "open";
           else { seatKind[i] = "ai"; difficulty[i] = sel.value.slice(3); }
-          $("start-btn").textContent = seatKind.includes("open") ? "Create table" : "Start game";
+          $("start-btn").textContent = seatKind.includes("open") ? "Create room" : "Start game";
         });
         row.append(sel);
       }
       rows.appendChild(row);
     }
-    $("start-btn").textContent = seatKind.includes("open") ? "Create table" : "Start game";
+    $("start-btn").textContent = seatKind.includes("open") ? "Create room" : "Start game";
   }
 
   function randomSeed() { $("seed-input").value = Math.floor(Math.random() * 1000000); }
@@ -198,7 +198,7 @@
         catch (e) { alert(e.message); }
       });
       const cancel = el("button", "danger", "Cancel");
-      cancel.addEventListener("click", () => { if (confirm("Cancel this table?")) act(`/api/games/${g.id}`, "DELETE"); });
+      cancel.addEventListener("click", () => { if (confirm("Cancel this room?")) act(`/api/games/${g.id}`, "DELETE"); });
       box.append(start, cancel);
     } else if (g.mySeat !== null) {
       const leave = el("button", null, "Leave");
@@ -214,7 +214,7 @@
     const head = el("div", "row-head");
     head.append(el("span", "name", `Game #${g.id}`), el("span", "muted small", describe(g)));
     if (g.status === "active" && g.currentSeat === g.mySeat) head.appendChild(el("span", "tag you", "your turn"));
-    if (g.status === "lobby") head.appendChild(el("span", "tag", "table"));
+    if (g.status === "lobby") head.appendChild(el("span", "tag", "room"));
     main.append(head, seatChips(g, canJoin));
     row.appendChild(main);
     if (g.status === "lobby") row.appendChild(tableControls(g));
@@ -268,7 +268,7 @@
       const myTurn = mine.filter((g) => g.status === "active" && g.currentSeat === g.mySeat);
       $("turn-panel").hidden = !myTurn.length;
       fill("turn-list", "games-count", myTurn, "", { link: true });
-      fill("open-list", "open-count", open, "No open tables. Create one below.", (g) => ({ canJoin: g.mySeat === null }));
+      fill("open-list", "open-count", open, "No open rooms. Create one below.", (g) => ({ canJoin: g.mySeat === null }));
       fill("games-list", "games-count", mine, "No games yet. Start one above.", { link: true });
       fill("live-list", "live-count", live.filter((g) => g.mySeat === null), "Nothing being played right now.", { link: true });
     } catch (e) {

@@ -842,6 +842,10 @@ or in the online list links to their profile.
 
 ### Tables
 
+Players see a table as a **room** ("New room", "Open rooms", "Create room");
+the code, the API and the log keep the name table, and "room" in this
+document still means a live game held in memory by `rooms.js`.
+
 A game starts life as a **table**: a `games` row with status `lobby`, no
 snapshot and no room. The host's `POST /api/games` names the seats; the open
 ones wait for people. `GET /api/games/open` lists tables with an open seat.
@@ -1025,7 +1029,7 @@ unknown one.
   Play or Watch). Each row: last activity, the civ, every seat as a chip
   (people link to their profiles; seats carry `userId` for this), the turn, the
   result from the owner's side (Won, Lost, Left when the AI has the seat,
-  Abandoned, In progress or Your turn, Table) and Play, Watch, Replay or a link
+  Abandoned, In progress or Your turn, Room) and Play, Watch, Replay or a link
   to the lobby. The lobby keeps its own "My games" list; this one is the full
   record on the profile.
 - **Achievements** (`achievementsPage.js`, `GET /api/achievements` and

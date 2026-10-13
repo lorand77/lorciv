@@ -98,7 +98,7 @@
   // out) is the AI's now; a win by that AI is not theirs.
   function outcome(g) {
     const handedOver = g.seats[g.userSeat].kind === "ai";
-    if (g.status === "lobby") return { text: "Table", cls: "out-progress" };
+    if (g.status === "lobby") return { text: "Room", cls: "out-progress" };
     if (g.status === "aborted") return { text: "Abandoned", cls: "out-neutral" };
     if (g.status === "active") {
       if (handedOver) return { text: "Left", cls: "out-neutral" };

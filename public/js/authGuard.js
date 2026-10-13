@@ -79,9 +79,14 @@ window.playerLink = function (userId, username, opts) {
     logout.addEventListener("click", async () => {
       logout.disabled = true;
       await fetch("/api/logout", { method: "POST", credentials: "same-origin" });
-      // The next person at this browser gets the default scheme, not this
-      // user's (theme.js keeps a copy for painting before /api/settings).
-      try { localStorage.removeItem("lorciv.theme"); } catch (e) { /* storage blocked */ }
+      // The next person at this browser starts from the defaults, not from
+      // what it kept for this user: the colour scheme (theme.js keeps a copy
+      // for painting before /api/settings) and the civ last picked for a new
+      // game (lobby.js).
+      try {
+        localStorage.removeItem("lorciv.theme");
+        localStorage.removeItem("lorciv.civ");
+      } catch (e) { /* storage blocked */ }
       location.href = "/login.html";
     });
     bar.append(who, logout);

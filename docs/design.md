@@ -409,7 +409,7 @@ open, and in-game chat, seen by everyone in the game and deleted
 `CHAT_RETENTION_DAYS` after it ends; friendships and requests, and the colour
 scheme, achievements); what a profile shows other players (join date,
 record, games, achievements, friends; a request only to its two people); the copy of the scheme kept in
-the browser and removed at logout; what deletion removes and keeps (see
+the browser and removed at logout, with the civ last picked for a new game; what deletion removes and keeps (see
 Authentication); sessions last 7 days
 (`src/auth/session.js`); IPs live in the throttle's memory for
 `AUTH_WINDOW_MS` (15 min) and are written only on the `auth.*` log lines;
@@ -828,8 +828,11 @@ ack would be dropped and leave the page locked.
 `public/lobby.html` with `public/js/lobby.js`, called "Play" wherever a
 player sees it (the rail, the page title, the "← Play" link on the game and
 replay pages); the code and the URL keep the name lobby. It has a new-game
-form (seat 0 is yours; seats 1–3 are AI with a difficulty each; seed; turn
-time) built from the engine's own catalogues, so it offers exactly what the
+form (the four civs in turn order, Rome first: you pick yours by choosing
+"You" on its seat, and the seat you leave takes over that seat's setting;
+the others are AI with a difficulty each or open; seed; turn time; the civ
+you last picked is remembered in the browser) built from the engine's own
+catalogues, so it offers exactly what the
 server accepts, and the lists: games where it is your turn, open tables, live
 games to watch, your games, and who is online. A person's name on a seat chip
 or in the online list links to their profile.

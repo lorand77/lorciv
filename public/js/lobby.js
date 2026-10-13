@@ -11,7 +11,16 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const difficulty = Array.from({ length: SEATS }, () => "prince");
-  const seatKind = Array.from({ length: SEATS }, (_, i) => (i === 0 ? "human" : "ai"));
+  // The civ you play (seat i is always PLAYER_NAMES[i]): the last one picked
+  // in this browser, else Rome. A convenience only, so a browser that will not
+  // keep it just starts at Rome.
+  const CIV_KEY = "lorciv.civ";
+  let mine = 0;
+  try {
+    const saved = Number(localStorage.getItem(CIV_KEY));
+    if (Number.isInteger(saved) && saved >= 0 && saved < SEATS) mine = saved;
+  } catch (e) { /* no storage */ }
+  const seatKind = Array.from({ length: SEATS }, (_, i) => (i === mine ? "human" : "ai"));
   let me = null;
 
   function el(tag, cls, text) {
@@ -41,6 +50,17 @@
 
   // ---- new table form ----
 
+  // You take seat `seat`; the seat you leave gets what that one was (open, or
+  // an AI and its level), so picking a civ never changes the rest of the table.
+  function playAs(seat) {
+    seatKind[mine] = seatKind[seat];
+    difficulty[mine] = difficulty[seat];
+    seatKind[seat] = "human";
+    mine = seat;
+    try { localStorage.setItem(CIV_KEY, String(seat)); } catch (e) { /* no storage */ }
+    renderSeats();
+  }
+
   function renderSeats() {
     const rows = $("seat-rows");
     rows.innerHTML = "";
@@ -49,10 +69,16 @@
       const name = el("span", "name", PLAYER_NAMES[i]);
       name.style.color = PLAYER_COLORS[i];
       row.append(swatch(i), name);
-      if (i === 0) {
-        row.append(el("span", "muted", "You"));
+      if (i === mine) {
+        row.classList.add("mine");
+        row.append(el("span", "you", "You"));
       } else {
         const sel = document.createElement("select");
+        sel.setAttribute("aria-label", PLAYER_NAMES[i]);
+        const you = document.createElement("option");
+        you.value = "you";
+        you.textContent = "You";
+        sel.appendChild(you);
         const open = document.createElement("option");
         open.value = "open";
         open.textContent = "Open seat";
@@ -65,6 +91,7 @@
         }
         sel.value = seatKind[i] === "open" ? "open" : "ai:" + difficulty[i];
         sel.addEventListener("change", () => {
+          if (sel.value === "you") return playAs(i);
           if (sel.value === "open") seatKind[i] = "open";
           else { seatKind[i] = "ai"; difficulty[i] = sel.value.slice(3); }
           $("start-btn").textContent = seatKind.includes("open") ? "Create table" : "Start game";
@@ -73,6 +100,7 @@
       }
       rows.appendChild(row);
     }
+    $("start-btn").textContent = seatKind.includes("open") ? "Create table" : "Start game";
   }
 
   function randomSeed() { $("seed-input").value = Math.floor(Math.random() * 1000000); }
@@ -92,7 +120,7 @@
     const err = $("new-game-error");
     err.textContent = "";
     const seats = Array.from({ length: SEATS }, (_, i) =>
-      i === 0 ? { kind: "human" } : seatKind[i] === "open" ? { kind: "open" } : { kind: "ai", difficulty: difficulty[i] });
+      i === mine ? { kind: "human" } : seatKind[i] === "open" ? { kind: "open" } : { kind: "ai", difficulty: difficulty[i] });
     // The seed as typed, or none (the server draws one). Number() reads "1e5"
     // as 100000 where parseInt read 1; anything not a whole number in range is
     // said, not swapped for another seed.

@@ -1,7 +1,7 @@
 "use strict";
 
-// /api/games: creating a game (one human seat, the rest AI), listing one's
-// games, reading one. Playing is over the socket (socket.game.test.js).
+// /api/games: creating a game (one human seat, at any civ, the rest AI),
+// listing one's games, reading one. Playing is over the socket (socket.game.test.js).
 
 const { describe, test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -62,6 +62,17 @@ describe("POST /api/games", () => {
     ]);
     assert.ok(seats[0].joined_at, "the human took the seat");
     assert.equal(seats[1].joined_at, null);
+  });
+
+  test("the host may play any civ: the AI seats before it have moved when the game opens", async () => {
+    const { c, user } = await registerUser(srv.baseUrl, "babylonian");
+    const res = await c.post("/api/games", { seats: [AI, AI, AI, { kind: "human" }] });
+    assert.equal(res.status, 201);
+    const row = db().prepare("SELECT current_seat, turn, host_id FROM games WHERE id = ?").get(res.body.id);
+    assert.deepEqual({ ...row }, { current_seat: 3, turn: 1, host_id: user.id }, "Babylon's turn, Rome to the Huns done");
+    const mine = (await c.get("/api/games")).body.find((g) => g.id === res.body.id);
+    assert.equal(mine.mySeat, 3);
+    assert.equal(mine.seats[3].civ, "Babylon");
   });
 
   test("a missing seed is drawn by the server; the default turn time applies", async () => {

@@ -688,9 +688,10 @@ the JSON last written to the database. Clients are never trusted for legality,
 turn or seat.
 
 - **Creating a game.** `POST /api/games` (`src/game/routes.js`) with four
-  seats, each `human`, `open` or `ai` with a difficulty, an optional seed (a
-  whole number from 0 to 4294967295; anything else is refused, never wrapped
-  into another map) and a turn-time key. Exactly one seat is human and it is the requester's. Every
+  seats, each `human`, `open` or `ai` with a difficulty, an optional seed
+  (a whole number from 0 to 4294967295; anything else is refused, never
+  wrapped into another map; the lobby never sends one, so there the server
+  draws every map) and a turn-time key. Exactly one seat is human and it is the requester's. Every
   key is checked against `src/shared/settings.js`, never trusted. A
   difficulty is the AI's handicap, so only an `ai` seat keeps one: a human or
   open seat is stored as `prince` whatever the request says, and the start
@@ -831,7 +832,8 @@ replay pages); the code and the URL keep the name lobby. It has a new-game
 form (the four civs in turn order, Rome first, each with a line on how the
 AI plays it, `PLAYER_BLURBS` in `game.js`: you pick yours by choosing
 "You" on its seat, and the seat you leave takes over that seat's setting;
-the others are AI with a difficulty each or open; seed; turn time; the civ
+the others are AI with a difficulty each or open; turn time; no seed, so
+the server draws every map; the civ
 you last picked is remembered in the browser) built from the engine's own
 catalogues, so it offers exactly what the
 server accepts, and the lists: games where it is your turn, open tables, live

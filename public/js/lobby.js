@@ -103,8 +103,6 @@
     $("start-btn").textContent = seatKind.includes("open") ? "Create room" : "Start game";
   }
 
-  function randomSeed() { $("seed-input").value = Math.floor(Math.random() * 1000000); }
-
   for (const t of TURN_TIMES) {
     const o = document.createElement("option");
     o.value = t.key;
@@ -113,28 +111,14 @@
   }
   $("turn-time").value = DEFAULT_TURN_TIME;
   renderSeats();
-  randomSeed();
-  $("seed-random").addEventListener("click", randomSeed);
 
   $("start-btn").addEventListener("click", async () => {
     const err = $("new-game-error");
     err.textContent = "";
     const seats = Array.from({ length: SEATS }, (_, i) =>
       i === mine ? { kind: "human" } : seatKind[i] === "open" ? { kind: "open" } : { kind: "ai", difficulty: difficulty[i] });
-    // The seed as typed, or none (the server draws one). Number() reads "1e5"
-    // as 100000 where parseInt read 1; anything not a whole number in range is
-    // said, not swapped for another seed.
-    const input = $("seed-input");
+    // No seed: the server draws the map's.
     const body = { seats, turnTime: $("turn-time").value };
-    if (input.validity.badInput) { err.textContent = "The seed is a whole number."; return; }
-    if (input.value.trim() !== "") {
-      const seed = Number(input.value);
-      if (!Number.isInteger(seed) || seed < 0 || seed > 4294967295) {
-        err.textContent = "The seed is a whole number from 0 to 4294967295.";
-        return;
-      }
-      body.seed = seed;
-    }
     try {
       const data = await api("POST", "/api/games", body);
       if (data.status === "active") location.href = "/game.html?id=" + data.id;

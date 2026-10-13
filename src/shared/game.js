@@ -520,8 +520,9 @@ class Game {
     }
 
     // An event for the observer, if there is one: { type: 'cityAttacked', by,
-    // owner, cityId, fell }, { type: 'cityCaptured', by, from, cityId, capital,
-    // eliminated }, { type: 'unitKilled', by, attackerType, victim, victimType }.
+    // owner, cityId, fell }, { type: 'cityCaptured', by, from, cityId,
+    // attackerType, capital, eliminated }, { type: 'unitKilled', by,
+    // attackerType, victim, victimType }, { type: 'techResearched', civ, tech }.
     _notify(event) {
         if (this.observer) this.observer(event, this);
     }
@@ -835,6 +836,7 @@ class Game {
             oldCiv.units = [];
         }
         this._notify({ type: 'cityCaptured', by: newOwnerIdx, from: oldOwnerIdx, cityId: city.id,
+                       attackerType: attacker.unitType,
                        capital: oldCiv.originalCapital === city, eliminated: oldCiv.isEliminated });
     }
 
@@ -1057,6 +1059,7 @@ class Game {
                 civ.science -= techCost;
                 const techName = TECH_DEFS[civ.currentResearch].name;
                 civ.techsResearched.add(civ.currentResearch);
+                this._notify({ type: 'techResearched', civ: civ.playerIndex, tech: civ.currentResearch });
                 civ.currentResearch = null;
                 civ.pendingMessages.push(`${techName} researched!`);
                 civ.researchJustCompleted = true;

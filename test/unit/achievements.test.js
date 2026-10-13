@@ -13,7 +13,7 @@ const {
 } = require("../../src/shared/achievements");
 const { UNIT_DEFS, TECH_DEFS, BUILDING_DEFS, RESOURCES } = require("../../src/shared/state");
 const { DIFFICULTIES } = require("../../src/shared/settings");
-const { Game, RULES_VERSION } = require("../../src/shared/game");
+const { Game, RULES_VERSION, PLAYER_NAMES } = require("../../src/shared/game");
 const { runCpuTurns } = require("../../src/shared/ai");
 const { serializeGame } = require("../../src/shared/snapshot");
 const { replayStart, replayStep } = require("../../src/shared/replay");
@@ -31,6 +31,10 @@ describe("the catalogue", () => {
       if (a.difficulty) assert.ok(DIFFICULTIES.includes(a.difficulty), a.key);
       for (const u of a.units ?? []) assert.ok(UNIT_DEFS[u], `${a.key}: ${u}`);
       for (const r of a.resources ?? []) assert.ok(RESOURCES[r], `${a.key}: ${r}`);
+      if (a.building) assert.ok(BUILDING_DEFS[a.building], `${a.key}: ${a.building}`);
+      // A civ's own names the seat that civ plays, and only those do.
+      assert.equal(a.group === "civs", a.seat !== undefined, a.key);
+      if (a.seat !== undefined) assert.ok(a.desc.startsWith(`As ${a.seat === 2 ? "the Huns" : PLAYER_NAMES[a.seat]},`), a.key);
     }
     for (const g of ACHIEVEMENT_GROUPS) assert.ok(ACHIEVEMENTS.some((a) => a.group === g.key), g.key);
   });
@@ -54,7 +58,7 @@ describe("the catalogue", () => {
 });
 
 describe("the engine's observer", () => {
-  test("reports captures, kills and attacks on cities as they happen, and changes nothing", () => {
+  test("reports captures, kills, attacks on cities and research as they happen, and changes nothing", () => {
     const watched = new Game({ seed: 1000, cpuFlags: [true, true, true, true] });
     const seen = [];
     watched.observer = (ev, game) => {
@@ -64,6 +68,10 @@ describe("the engine's observer", () => {
         assert.notEqual(ev.by, ev.from);
         assert.equal(ev.eliminated, game.civs[ev.from].isEliminated);
         assert.equal(ev.capital, game.civs[ev.from].originalCapital?.id === ev.cityId);
+        assert.equal(UNIT_DEFS[ev.attackerType].type, "melee", "only soldiers take cities");
+      } else if (ev.type === "techResearched") {
+        assert.ok(game.civs[ev.civ].techsResearched.has(ev.tech));
+        assert.equal(game.civs[ev.civ].currentResearch, ev.tech, "told before the next is chosen");
       } else if (ev.type === "cityAttacked") {
         assert.notEqual(ev.by, ev.owner);
         if (!ev.fell) assert.equal(game.cityById(ev.cityId).owner, ev.owner);
@@ -74,7 +82,7 @@ describe("the engine's observer", () => {
       }
     };
     runCpuTurns(watched, 200);
-    for (const type of ["cityCaptured", "cityAttacked", "unitKilled"]) assert.ok(seen.includes(type), type);
+    for (const type of ["cityCaptured", "cityAttacked", "unitKilled", "techResearched"]) assert.ok(seen.includes(type), type);
 
     const plain = new Game({ seed: 1000, cpuFlags: [true, true, true, true] });
     runCpuTurns(plain, 200);
@@ -179,6 +187,87 @@ describe("the tracker", () => {
     tracker.onEvent({ type: "cityCaptured", by: 0, from: 1, cityId: 1, capital: true, eliminated: true }, game);
     assert.deepEqual(feats(tracker), []);
     assert.equal(tracker.result()[0].captures, 0);
+  });
+});
+
+describe("the civilizations' own", () => {
+  // Every seat a person's, each civ with a city: seat i is Rome, Greece, the
+  // Huns, Babylon.
+  function setup() {
+    const game = new Game({ seed: 7, cpuFlags: [false, false, false, false] });
+    const seats = game.civs.map(() => ({ kind: "human" }));
+    const cities = game.civs.map((c) => game.foundCity(c.units.find((u) => u.unitType === "settler")));
+    return { game, seats, cities, tracker: new Tracker(seats) };
+  }
+  const take = (tracker, game, by, from, cityId, attackerType = "swordsman") =>
+    tracker.onEvent({ type: "cityCaptured", by, from, cityId, attackerType, capital: false, eliminated: false }, game);
+  const feats = (tracker, seat) => tracker.result()[seat].feats;
+
+  test("Veni, Vidi, Vici: Rome takes three cities in one turn", () => {
+    const { game, cities, tracker } = setup();
+    game.turn = 5;
+    take(tracker, game, 0, 1, cities[1].id);
+    take(tracker, game, 0, 2, cities[2].id);
+    game.turn = 6;
+    take(tracker, game, 0, 3, cities[3].id);
+    // Greece taking three in one turn is not Rome.
+    for (let i = 0; i < 3; i++) take(tracker, game, 1, 2, cities[2].id);
+    assert.deepEqual([feats(tracker, 0), feats(tracker, 1)], [[], []]);
+    take(tracker, game, 0, 1, cities[1].id);
+    take(tracker, game, 0, 2, cities[2].id);
+    assert.deepEqual(feats(tracker, 0), ["veni_vidi_vici"]);
+  });
+
+  test("Beware of Greeks Bearing Gifts: Greece takes a walled city with a Horseman", () => {
+    const { game, cities, tracker } = setup();
+    take(tracker, game, 1, 0, cities[0].id, "horseman");
+    cities[0].buildings.push("walls");
+    take(tracker, game, 1, 0, cities[0].id, "knight");
+    take(tracker, game, 0, 1, cities[0].id, "horseman");
+    assert.deepEqual([feats(tracker, 0), feats(tracker, 1)], [[], []]);
+    take(tracker, game, 1, 0, cities[0].id, "horseman");
+    assert.deepEqual(feats(tracker, 1), ["greeks_bearing_gifts"]);
+  });
+
+  test("An Eye for an Eye: Babylon pays back the civ that took its city, on its very next turn", () => {
+    const { game, cities, tracker } = setup();
+    game.turn = 4;
+    take(tracker, game, 1, 3, cities[3].id);   // Greece takes a city of Babylon's
+    take(tracker, game, 3, 2, cities[2].id);   // Babylon takes from the Huns instead
+    game.turn = 5;
+    take(tracker, game, 3, 1, cities[1].id);   // a round too late
+    assert.deepEqual(feats(tracker, 3), []);
+    take(tracker, game, 1, 3, cities[3].id);
+    take(tracker, game, 3, 1, cities[1].id);   // the same round: Babylon plays after Greece
+    assert.deepEqual(feats(tracker, 3), ["eye_for_an_eye"]);
+    // Rome paying the Huns back is the same feat, but not Rome's to earn.
+    take(tracker, game, 2, 0, cities[0].id);
+    game.turn = 6;
+    take(tracker, game, 0, 2, cities[2].id);
+    assert.deepEqual(feats(tracker, 0), []);
+  });
+
+  test("Brute Force: the Huns know every tech before anyone else does", () => {
+    const research = (game, tracker, civ) => {
+      for (const t of Object.keys(TECH_DEFS)) game.civs[civ].techsResearched.add(t);
+      tracker.onEvent({ type: "techResearched", civ, tech: "education" }, game);
+    };
+    const first = setup();
+    first.tracker.onEvent({ type: "techResearched", civ: 2, tech: "mining" }, first.game);
+    research(first.game, first.tracker, 2);
+    research(first.game, first.tracker, 0);
+    assert.deepEqual(feats(first.tracker, 2), ["brute_force"]);
+    assert.deepEqual(feats(first.tracker, 0), [], "Rome finishing second, or at all, is nothing");
+
+    const second = setup();
+    research(second.game, second.tracker, 1);
+    research(second.game, second.tracker, 2);
+    assert.deepEqual(feats(second.tracker, 2), []);
+
+    const ai = setup();
+    ai.seats[2].kind = "ai";
+    research(ai.game, ai.tracker, 2);
+    assert.deepEqual(feats(ai.tracker, 2), [], "not once the AI has the seat");
   });
 });
 

@@ -16,6 +16,8 @@
 //   n      the threshold of a one-shot achievement that has one; the server
 //          checks against this same number
 //   tiers  thresholds of a tiered achievement (Bronze, Silver, Gold)
+//   seat   for a civ's own achievement, the seat that civ plays (seat i is
+//          always PLAYER_NAMES[i]: Rome, Greece, the Huns, Babylon)
 // ============================================================
 
 const TIER_NAMES = ["Bronze", "Silver", "Gold"];
@@ -24,6 +26,7 @@ const ACHIEVEMENT_GROUPS = [
     { key: "victory",    title: "Victory" },
     { key: "conquest",   title: "Conquest" },
     { key: "empire",     title: "Empire" },
+    { key: "civs",       title: "Civilizations" },
     { key: "milestones", title: "Milestones" },
 ];
 
@@ -81,6 +84,17 @@ const ACHIEVEMENTS = [
       desc: "Hold Iron and Horses within your borders by turn {n}." },
     { key: "metropolis", name: "Metropolis", icon: "🏙️", group: "empire", n: 20,
       desc: "Grow a city to size {n}." },
+
+    // ---- civilizations: one civ's own, with a nod to its history ----
+    { key: "veni_vidi_vici", name: "Veni, Vidi, Vici", icon: "🦅", group: "civs", seat: 0, n: 3,
+      desc: "As Rome, capture {n} cities in a single turn." },
+    { key: "greeks_bearing_gifts", name: "Beware of Greeks Bearing Gifts", icon: "🐴", group: "civs", seat: 1,
+      units: ["horseman"], building: "walls",
+      desc: "As Greece, take a city with Walls using a Horseman." },
+    { key: "brute_force", name: "Brute Force", icon: "🧠", group: "civs", seat: 2,
+      desc: "As the Huns, research every technology before anyone else does." },
+    { key: "eye_for_an_eye", name: "An Eye for an Eye", icon: "👁️", group: "civs", seat: 3,
+      desc: "As Babylon, take a city from the civ that just took one of yours, on your very next turn." },
 
     // ---- milestones (tiered) ----
     { key: "games_played", name: "Veteran", icon: "📜", group: "milestones",

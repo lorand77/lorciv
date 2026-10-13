@@ -31,8 +31,14 @@ class Tracker {
     this.kinds = seats;
     this.seats = seats.map(() => ({
       feats: new Set(), captures: 0, founded: 0, lostCity: false, lostCapital: false, sieges: new Map(),
+      // Cities taken in one turn: { turn, n }.
+      turnCaptures: { turn: 0, n: 0 },
+      // Who last took a city of this seat's, and on which turn: seat -> turn.
+      grudges: new Map(),
     }));
     this.resourceTiles = null;
+    // The first civ to know every tech, once there is one.
+    this.allTechsFirst = null;
   }
 
   human(seat) {
@@ -43,17 +49,42 @@ class Tracker {
     this.seats[seat].feats.add(key);
   }
 
-  // Game.observer: combat as it happens.
+  // A civ's own achievement, earned only by the seat that civ plays.
+  earnAsCiv(seat, key) {
+    if (A[key].seat === seat) this.earn(seat, key);
+  }
+
+  // Game.observer: combat and research as they happen.
   onEvent(ev, game) {
     if (ev.type === "cityCaptured") {
       const loser = this.seats[ev.from];
       loser.lostCity = true;
       if (ev.capital) loser.lostCapital = true;
       loser.sieges.delete(ev.cityId);
+      loser.grudges.set(ev.by, game.turn);
       if (!this.human(ev.by)) return;
-      this.seats[ev.by].captures++;
+      const taker = this.seats[ev.by];
+      taker.captures++;
       if (ev.capital) this.earn(ev.by, "capital_punishment");
       if (ev.eliminated) this.earn(ev.by, "kingslayer");
+      // A seat takes cities only on its own turn, so the turn number tells
+      // one of its turns from the next.
+      if (taker.turnCaptures.turn !== game.turn) taker.turnCaptures = { turn: game.turn, n: 0 };
+      if (++taker.turnCaptures.n >= A.veni_vidi_vici.n) this.earnAsCiv(ev.by, "veni_vidi_vici");
+      const gift = A.greeks_bearing_gifts;
+      if (gift.units.includes(ev.attackerType) && game.cityById(ev.cityId).buildings.includes(gift.building)) {
+        this.earnAsCiv(ev.by, "greeks_bearing_gifts");
+      }
+      // Paid back on the taker's very next turn: the same round when it plays
+      // after the civ that took its city, the next round when before.
+      const lostOn = taker.grudges.get(ev.from);
+      if (lostOn !== undefined && game.turn === (ev.by > ev.from ? lostOn : lostOn + 1)) {
+        this.earnAsCiv(ev.by, "eye_for_an_eye");
+      }
+    } else if (ev.type === "techResearched") {
+      if (this.allTechsFirst !== null || game.civs[ev.civ].techsResearched.size < TECH_COUNT) return;
+      this.allTechsFirst = ev.civ;
+      if (this.human(ev.civ)) this.earnAsCiv(ev.civ, "brute_force");
     } else if (ev.type === "cityAttacked") {
       if (ev.fell || !this.human(ev.owner)) return;
       const city = game.cityById(ev.cityId);

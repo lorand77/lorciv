@@ -136,15 +136,20 @@ module.exports = {
   `),
 
   // --- achievements (src/achievements/service.js) ---
-  // Ended games not yet looked at, oldest first: at boot, every game from
-  // before achievements existed (the backfill) and any a restart cut short.
-  // A table cancelled before it started has no snapshot and nothing to award.
+  // Ended games not yet looked at by this version of the awarding (?),
+  // oldest first: at boot, every game from before achievements existed or
+  // before the catalogue last grew (the backfill), and any a restart cut
+  // short. A table cancelled before it started has no snapshot and nothing to
+  // award.
   listUnawardedGames: db.prepare(`
     SELECT id FROM games
-    WHERE status IN ('finished', 'aborted') AND snapshot IS NOT NULL AND achievements_at IS NULL
+    WHERE status IN ('finished', 'aborted') AND snapshot IS NOT NULL
+      AND (achievements_version IS NULL OR achievements_version < ?)
     ORDER BY finished_at, id
   `),
-  markGameAwarded: db.prepare("UPDATE games SET achievements_at = datetime('now') WHERE id = ?"),
+  markGameAwarded: db.prepare(
+    "UPDATE games SET achievements_at = datetime('now'), achievements_version = ? WHERE id = ?"
+  ),
   setSeatCaptures: db.prepare("UPDATE game_seats SET captures = ? WHERE game_id = ? AND seat = ?"),
   // The seats of one game that count for their person (COUNTED), active
   // accounts only: whether the seat won, and how many people sat down.

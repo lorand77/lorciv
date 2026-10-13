@@ -315,16 +315,17 @@ a table that already exists needs `ALTER`, so those go through
 `addColumnIfMissing` in `src/db/index.js`, which runs at every boot and brings
 an older database up to date. A new column on an existing table therefore needs
 a line there, or existing databases never get it. The migrations so far add
-`users.prefs` (2026-10-11) and `games.achievements_at` and
-`game_seats.captures` (2026-10-12); `test/integration/migrations.*.test.js`
+`users.prefs` (2026-10-11), `games.achievements_at` and
+`game_seats.captures` (2026-10-12) and `games.achievements_version`
+(2026-10-13); `test/integration/migrations.*.test.js`
 run them against a database in the shape it had before.
 
 Tables: `users` (id, username, password_hash, created_at, deactivated_at, and
 `prefs`, the display settings as JSON, NULL for the defaults);
 `sessions`, which the session store creates itself; `games` (status, host,
 seed, settings JSON, the snapshot JSON, seq, turn, current seat, deadline,
-winner, timestamps, and `achievements_at`, when its achievements were
-awarded), `game_seats` (one row per seat: open, human or ai, the user, the
+winner, timestamps, and `achievements_at` and `achievements_version`, when
+and by which version of the awarding its achievements were awarded), `game_seats` (one row per seat: open, human or ai, the user, the
 difficulty, missed turns, and `captures`, the cities taken while its person
 played it), `game_actions` (every player action in order, as JSON, plus the
 server's `timeout` and `leave` rows), `chat_messages`, `friendships` (one row
@@ -568,9 +569,10 @@ that used to be a module-level object in `ai.js` and would have been shared by
 every game on the server; and the PRNG's state, because bankruptcy draws from
 it mid-game. And `observer`, null or a function the engine calls with an
 event and the game whenever a city is attacked (`cityAttacked`: by, owner,
-cityId, fell), taken (`cityCaptured`: by, from, cityId, capital, eliminated)
-or a unit is killed in an attack (`unitKilled`: by, attackerType, victim,
-victimType). It only watches, is never saved, and nothing in a live game sets
+cityId, fell), taken (`cityCaptured`: by, from, cityId, attackerType,
+capital, eliminated), a unit is killed in an attack (`unitKilled`: by,
+attackerType, victim, victimType) or a tech is researched (`techResearched`:
+civ, tech). It only watches, is never saved, and nothing in a live game sets
 it: the achievements read a replayed game through it (`replayStart(setup,
 observer)`). `ai.js` has `runCpuTurns(game, maxTurn)`: while there is no
 winner and the current civ is a CPU, take its turn and end it. It also stops
@@ -1063,8 +1065,15 @@ and Trebuchet fielded at once; Underdog, a Warrior or Archer destroying a
 medieval unit), **Empire** (Founder, 5 cities founded; Scholar, every tech;
 Golden Age, every kind of building standing at once; Treasure Hunter, Gold,
 Silver and Diamonds held at once; Iron and Horses, both held by turn 75;
-Metropolis, a city of 20) and **Milestones**, tiered Bronze, Silver and Gold
-(games played 10/50/100, wins 5/25/100, cities captured 10/50/200). The
+Metropolis, a city of 20), **Civilizations**, each civ's own with a nod to
+its history and earned only playing that civ's seat (Veni, Vidi, Vici: Rome
+takes 3 cities in one turn; Beware of Greeks Bearing Gifts: Greece takes a
+walled city with a Horseman; Brute Force: the Huns, of all people, are the
+first to know every tech; An Eye for an Eye: Babylon takes a city from the
+civ that just took one of its own, on its very next turn, which is the same
+round when it plays after that civ and the next when before), and
+**Milestones**, tiered Bronze, Silver and Gold (games played 10/50/100, wins
+5/25/100, cities captured 10/50/200). The
 numbers come from AI-only games (`tools/simulate.js`): they are won between
 turns 170 and 320, their biggest cities reach 7 to 24, and no AI civ ever
 stands every building.
@@ -1078,10 +1087,13 @@ stands every building.
 - **When.** `rooms.js` calls `gameEnded` when a game finishes or is abandoned
   (by its last human, or the abandon sweep). The service queues it and does
   one game at a time, oldest first. At boot `resumeAll` calls `start`, which
-  queues every ended game whose `games.achievements_at` is still NULL: games
-  from before achievements existed (the backfill: the migration adds the
-  column empty) and any a restart cut short. Awarding is an upsert that only
-  ever raises a tier, so doing a game twice changes nothing.
+  queues every ended game not awarded by today's `AWARDS_VERSION`
+  (`games.achievements_version`, `service.js`): games from before
+  achievements existed (the backfill: the migration adds the column empty),
+  any a restart cut short, and, after the version is bumped because the
+  catalogue grew (2 brought the civilizations' own), every game awarded
+  before, so it can earn what is new. Awarding is an upsert that only ever
+  raises a tier, so doing a game twice changes nothing.
 - **The replay.** Inside-the-game feats are read by replaying the game from
   its actions (`replay.js`, as the replay page does) with the engine's
   `observer` attached; `analyze.js`'s tracker turns the events (captures,

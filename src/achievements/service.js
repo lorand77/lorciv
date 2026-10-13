@@ -13,8 +13,9 @@
 //                 wins, cities taken, a win as every civ, three in a row.
 //
 // rooms.js calls gameEnded() when a game finishes or is abandoned, and
-// start() at boot, which queues every ended game not yet awarded: that is the
-// backfill, and it also catches a game a restart cut short. Games are done one
+// start() at boot, which queues every ended game not yet awarded by this
+// version of the awarding (AWARDS_VERSION): that is the backfill, and it also
+// catches a game a restart cut short. Games are done one
 // at a time, oldest first. Awarding only ever raises a tier, so doing a game
 // twice is harmless. Newly earned achievements go out on `events` as
 // "earned" ({ userId, earned }), which socket.js sends to the person's tabs.
@@ -32,6 +33,12 @@ const {
 
 const DIFFICULTY_WINS = ["princely_victory", "royal_victory", "imperial_victory"];
 
+// The version of the awarding. Bump it when the catalogue gains achievements
+// that games already awarded could have earned: at the next boot every ended
+// game is awarded again (games.achievements_version), which only ever adds.
+// 1: the first catalogue; 2: the civilizations' own.
+const AWARDS_VERSION = 2;
+
 const events = new EventEmitter();
 const queue = [];   // game ids waiting
 let current = null; // the job the worker has
@@ -47,7 +54,7 @@ function gameEnded(gameId) {
 }
 
 function start() {
-  for (const { id } of queries.listUnawardedGames.all()) gameEnded(id);
+  for (const { id } of queries.listUnawardedGames.all(AWARDS_VERSION)) gameEnded(id);
 }
 
 function pump() {
@@ -79,9 +86,10 @@ function pump() {
 // no replay needed).
 function jobFor(gameId) {
   const row = queries.getGameById.get(gameId);
-  if (!row || !row.snapshot || row.achievements_at || !["finished", "aborted"].includes(row.status)) return null;
+  if (!row || !row.snapshot || row.achievements_version >= AWARDS_VERSION) return null;
+  if (!["finished", "aborted"].includes(row.status)) return null;
   if (!queries.achievementSeats.all(gameId).length) {
-    queries.markGameAwarded.run(gameId);
+    queries.markGameAwarded.run(AWARDS_VERSION, gameId);
     return null;
   }
   return {
@@ -177,7 +185,7 @@ function award(gameId, res) {
       }
       for (const key of keys) give(earned, s.user_id, key, 1, ref);
     }
-    queries.markGameAwarded.run(gameId);
+    queries.markGameAwarded.run(AWARDS_VERSION, gameId);
     for (const userId of people.keys()) awardRecord(earned, userId, ref);
   })();
 
@@ -239,4 +247,4 @@ function listFor(userId) {
   };
 }
 
-module.exports = { events, gameEnded, start, idle, stop, listFor };
+module.exports = { events, gameEnded, start, idle, stop, listFor, AWARDS_VERSION };

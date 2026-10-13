@@ -44,10 +44,13 @@ CREATE TABLE IF NOT EXISTS games (
   started_at    TEXT,
   finished_at   TEXT,
   updated_at    TEXT    NOT NULL DEFAULT (datetime('now')),
-  -- When the game's achievements were awarded (src/achievements/service.js);
-  -- NULL for a game not over yet or not looked at yet, which the next boot
-  -- picks up. Added after launch: src/db/index.js adds it to older databases.
-  achievements_at TEXT
+  -- When the game's achievements were awarded (src/achievements/service.js),
+  -- and by which version of the awarding (AWARDS_VERSION there); NULL for a
+  -- game not over yet or not looked at yet. A game awarded by an older
+  -- version is looked at again at the next boot. Added after launch:
+  -- src/db/index.js adds them to older databases.
+  achievements_at TEXT,
+  achievements_version INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_games_status ON games (status);
 

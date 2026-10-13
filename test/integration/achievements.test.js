@@ -72,7 +72,7 @@ test("a win alone against the AI: the win feats, the difficulty, the toast and t
   await finish(hard, 0);
   assert.ok(keysOf(alice).includes("imperial_victory"));
   const before = queries.listAchievements.all(alice.user.id);
-  db().prepare("UPDATE games SET achievements_at = NULL WHERE id = ?").run(hard);
+  db().prepare("UPDATE games SET achievements_version = NULL WHERE id = ?").run(hard);
   achievements.gameEnded(hard);
   await achievements.idle();
   assert.deepEqual(queries.listAchievements.all(alice.user.id), before);
@@ -160,5 +160,24 @@ test("the boot awards every ended game not yet awarded", async () => {
   srv = await startServer();
   await achievements.idle();
   assert.ok(queries.getGameById.get(id).achievements_at);
+  assert.equal(queries.getGameById.get(id).achievements_version, achievements.AWARDS_VERSION);
   assert.ok(keysOf(jo).includes("first_blood"));
+});
+
+test("the boot awards again a game an older version of the awarding looked at", async () => {
+  const kim = await registerUser(srv.baseUrl, "kim");
+  const id = await played(kim);
+  await finish(id, 0);
+  // As if awarded before the catalogue grew, and its awards lost since.
+  db().prepare("UPDATE games SET achievements_version = ? WHERE id = ?").run(achievements.AWARDS_VERSION - 1, id);
+  db().prepare("DELETE FROM user_achievements WHERE user_id = ?").run(kim.user.id);
+  const current = await played(kim);
+  await finish(current, 1);
+  const before = queries.getGameById.get(current).achievements_at;
+  await srv.close();
+  srv = await startServer();
+  await achievements.idle();
+  assert.equal(queries.getGameById.get(id).achievements_version, achievements.AWARDS_VERSION);
+  assert.ok(keysOf(kim).includes("first_blood"), "the old game's win is back");
+  assert.equal(queries.getGameById.get(current).achievements_at, before, "a game of this version is left alone");
 });

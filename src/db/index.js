@@ -64,5 +64,10 @@ addColumnIfMissing("users", "prefs", "TEXT");
 addColumnIfMissing("games", "achievements_at", "TEXT");
 addColumnIfMissing("game_seats", "captures", "INTEGER");
 
+// 2026-10-13: the awarding's version. NULL on every game awarded before it,
+// so the boot awards them again under today's catalogue (the civ
+// achievements); awarding only ever raises, so that is safe.
+addColumnIfMissing("games", "achievements_version", "INTEGER");
+
 module.exports = db;
 module.exports.addColumnIfMissing = addColumnIfMissing;

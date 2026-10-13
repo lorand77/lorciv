@@ -98,6 +98,9 @@ under `src/game/` or `src/shared/`.
   (combat, production, the AI, map generation) must bump `RULES_VERSION` in
   `src/shared/game.js`, or replays of older games break: see "Rules versions"
   in `docs/design.md`.
+- An achievement that games already awarded could have earned needs
+  `AWARDS_VERSION` in `src/achievements/service.js` bumped, or only new games
+  will ever earn it.
 - Catalogues (difficulties, turn-time presets, action names) are allowlists in
   `src/shared/`. Add entries there, not in ad-hoc lists elsewhere.
 - Native modules need a rebuild after `npm install` because `ignore-scripts` is

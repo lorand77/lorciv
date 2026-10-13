@@ -68,7 +68,7 @@
       const row = el("div", "seat-row");
       const name = el("span", "name", PLAYER_NAMES[i]);
       name.style.color = PLAYER_COLORS[i];
-      row.append(swatch(i), name);
+      row.append(swatch(i), name, el("span", "blurb muted", PLAYER_BLURBS[i]));
       if (i === mine) {
         row.classList.add("mine");
         row.append(el("span", "you", "You"));

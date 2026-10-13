@@ -828,7 +828,8 @@ ack would be dropped and leave the page locked.
 `public/lobby.html` with `public/js/lobby.js`, called "Play" wherever a
 player sees it (the rail, the page title, the "← Play" link on the game and
 replay pages); the code and the URL keep the name lobby. It has a new-game
-form (the four civs in turn order, Rome first: you pick yours by choosing
+form (the four civs in turn order, Rome first, each with a line on how the
+AI plays it, `PLAYER_BLURBS` in `game.js`: you pick yours by choosing
 "You" on its seat, and the seat you leave takes over that seat's setting;
 the others are AI with a difficulty each or open; seed; turn time; the civ
 you last picked is remembered in the browser) built from the engine's own

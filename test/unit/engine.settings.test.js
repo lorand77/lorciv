@@ -1,11 +1,11 @@
 "use strict";
 
 // src/shared/settings.js: the allowlists agree with the engine's catalogues,
-// and every action name has a handler.
+// every action name has a handler, and every seat has its civ.
 
 const { describe, test } = require("node:test");
 const assert = require("node:assert/strict");
-const { Game, DIFFICULTY_DEFS } = require("../../src/shared/game");
+const { Game, DIFFICULTY_DEFS, PLAYER_NAMES, PLAYER_COLORS, PLAYER_BLURBS } = require("../../src/shared/game");
 const { applyAction } = require("../../src/shared/actions");
 const settings = require("../../src/shared/settings");
 
@@ -36,5 +36,13 @@ describe("settings", () => {
   test("the fixed numbers", () => {
     assert.equal(settings.MISSED_TURN_LIMIT, 3);
     assert.equal(settings.SEATS, 4);
+  });
+
+  test("every seat has a civ: a name, a colour and a short line for the lobby", () => {
+    for (const list of [PLAYER_NAMES, PLAYER_COLORS, PLAYER_BLURBS]) assert.equal(list.length, settings.SEATS);
+    for (const line of PLAYER_BLURBS) {
+      const words = line.split(/\s+/).length;
+      assert.ok(words >= 5 && words <= 10, `${line}: ${words} words`);
+    }
   });
 });

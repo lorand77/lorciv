@@ -31,6 +31,16 @@ const PLAYER_NAMES = ['Rome', 'Greece', 'The Huns', 'Babylon'];
 
 const PLAYER_COLORS = ['#dc3232', '#3264dc', '#32b432', '#dcb432'];
 
+// One line per civ for the lobby. The civs play alike in a person's hands;
+// these say how the AI plays each (LEADER_FLAVORS in ai.js), so keep the two
+// in step.
+const PLAYER_BLURBS = [
+    'Balanced legions and roads; first to march, every turn.',
+    'Philosophers and temples first; spears only when pushed.',
+    'Horses, raids and plunder; libraries are for the conquered.',
+    'Scholars, gardens and laws; the last to move, the wisest.',
+];
+
 const DIFFICULTY_DEFS = {
     prince:  { prod_mult: 1.0, food_mult: 1.0, starting_xp: 0 },
     king:    { prod_mult: 1.2, food_mult: 1.2, starting_xp: 10 },
@@ -1125,4 +1135,4 @@ class Game {
 if (typeof module !== 'undefined' && module.exports) module.exports = { Game, computeCityYields, processProduction,
      availableTechs, canResearch, computeScore, calcDamage,
      effectiveStrength, cityCombatStrength, meleeAttack, rangedAttack, bombardCity, getItemCost, buyCost,
-      CITY_NAMES, PLAYER_NAMES, PLAYER_COLORS, DIFFICULTY_DEFS, MAP_COLS, MAP_ROWS, RULES_VERSION };
+      CITY_NAMES, PLAYER_NAMES, PLAYER_COLORS, PLAYER_BLURBS, DIFFICULTY_DEFS, MAP_COLS, MAP_ROWS, RULES_VERSION };

@@ -7,6 +7,8 @@ absent player's seat is handed to the AI.
 
 **Live:** https://lorciv.lorand77.dev
 
+![A game's replay at turn 93: Rome, Greece and Babylon on the hex map, with the scores and the replay controls](screenshot.png)
+
 ## Features
 
 - Tables in the lobby: open a table, let people take seats, start when ready

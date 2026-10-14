@@ -957,7 +957,9 @@ Deactivated and deleted accounts are left off. The rule for which games count
 is one SQL fragment in `queries.js` (`COUNTED`, with `WON`), shared with the
 profile's stats, so the two pages cannot disagree. `leaderboard.html` renders
 it, marks the viewer's row, links each name to its profile and gives every
-other row a friend control.
+other row a friend control. Its column headers sort the table in the browser,
+over the rows the server sent (the top 100 by wins, not a fresh cut per
+column); # stays each player's rank by wins whatever the order.
 
 **Replays.** The engine is deterministic and the server recorded every action
 in order, including its own `timeout` and `leave` rows, so a game's states can

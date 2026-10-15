@@ -25,6 +25,17 @@ describe("determinism", () => {
     assert.ok(a.turn > 100, "the game ran");
   });
 
+  test("the simulator's flavorBySeat defaults to each civ's own flavor", () => {
+    const play = (flavorBySeat) => {
+      const g = new Game({ seed: 4242, cpuFlags: ALL_CPU });
+      runCpuTurns(g, 80, flavorBySeat);
+      return snap(g);
+    };
+    const own = play(undefined);
+    assert.equal(play([0, 1, 2, 3]), own, "each seat playing its own flavor is a real game");
+    assert.notEqual(play([2, 2, 2, 2]), own, "the Huns' flavor in every seat plays differently");
+  });
+
   test("different seeds give different maps", () => {
     const terrain = (g) => [...g.tiles.values()].map((t) => t.terrain).join("");
     assert.notEqual(terrain(new Game({ seed: 1 })), terrain(new Game({ seed: 2 })));

@@ -70,7 +70,7 @@ public/
                customize.js (the Customize page)
                renderer.js (the canvas map) ui.js (the game page)
                replay-page.js (the replay page)
-tools/         simulate.js — N AI-only games, by hand
+tools/         simulate.js — N AI-only games over worker threads, by hand
 test/          unit/, integration/, helpers/ (server.js, logs.js)
 docs/          CLAUDE.md design.md plan.md setup.md
 ```
@@ -579,7 +579,11 @@ winner and the current civ is a CPU, take its turn and end it. It also stops
 the moment the last human civ is eliminated: the turn order skips eliminated
 civs, so otherwise the AI would play the rest of the game in that one call,
 seconds of a blocked server (an AI-only game, which has no human to lose,
-plays on). The simulator, the tests and `rooms.js` all use it.
+plays on). The simulator, the tests and `rooms.js` all use it. A third
+argument, `flavorBySeat`, is the simulator's alone: seat i plays the AI
+flavor of civ `flavorBySeat[i]` instead of its own, so `tools/simulate.js`
+can tell a flavor's strength from its seat's place in the turn order. Without
+it every civ plays its own flavor, as every real game and replay does.
 
 **Determinism.** The map comes from the seed, combat has no randomness, the
 AI has none, and the only mid-game draw is bankruptcy from the seeded PRNG.

@@ -66,8 +66,10 @@ function _pickStrategy(game, civ, baseFlavors) {
     return candidates.reduce((best, c) => c[1] > best[1] ? c : best)[0];
 }
 
-function _getEffectiveFlavors(game, civ) {
-    const base  = LEADER_FLAVORS[civ.playerIndex] ?? LEADER_FLAVORS[0];
+// flavorBySeat[i] names the civ whose flavor seat i plays; only the simulator
+// passes it, so in a real game every civ plays its own.
+function _getEffectiveFlavors(game, civ, flavorBySeat) {
+    const base  = LEADER_FLAVORS[flavorBySeat?.[civ.playerIndex] ?? civ.playerIndex] ?? LEADER_FLAVORS[0];
     const state = game.aiState[civ.playerIndex];
 
     let strategy;
@@ -658,8 +660,8 @@ function _actUpgrades(game, civ, flavors) {
 // ---------------------------------------------------------------------------
 // Main AI Entry Point
 // ---------------------------------------------------------------------------
-function aiTakeTurn(game, civ) {
-    const flavors      = _getEffectiveFlavors(game, civ);
+function aiTakeTurn(game, civ, flavorBySeat = null) {
+    const flavors      = _getEffectiveFlavors(game, civ, flavorBySeat);
     const danger       = _buildDangerMap(game, civ);
     const attackTarget = _selectAttackTarget(game, civ, flavors);
     const { roles, defenderCities } = _assignRoles(civ, danger, attackTarget);
@@ -714,14 +716,15 @@ function aiTakeTurn(game, civ) {
 // turn cap, or the moment the last human civ is eliminated: the turn order
 // skips eliminated civs, so without that stop the AI would play the rest of
 // the game in one call. An AI-only game (the simulator) has no human to lose.
-// The simulator, the tests and the server's rooms all use it.
-function runCpuTurns(game, maxTurn = Infinity) {
+// The simulator, the tests and the server's rooms all use it; flavorBySeat is
+// the simulator's (see _getEffectiveFlavors).
+function runCpuTurns(game, maxTurn = Infinity, flavorBySeat = null) {
     while (game.winner === null && game.turn <= maxTurn && game.currentCiv().isCpu && !humansAllOut(game)) {
         // Nobody reads an AI civ's messages; clear them as rooms.js does for a
         // human who acts, or they pile up in every snapshot for the whole game.
         game.currentCiv().pendingMessages = [];
         game.currentCiv().researchJustCompleted = false;
-        aiTakeTurn(game, game.currentCiv());
+        aiTakeTurn(game, game.currentCiv(), flavorBySeat);
         game.endTurn();
     }
 }

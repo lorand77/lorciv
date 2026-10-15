@@ -1,0 +1,10 @@
+1000 games, seats mirror:rome, first seed 1, 8 jobs
+
+Wins by seat (seat 1 moves first)
+  Seat 1  Rome         252   25.2% ± 2.7
+  Seat 2  Rome         283   28.3% ± 2.8
+  Seat 3  Rome         219   21.9% ± 2.6
+  Seat 4  Rome         246   24.6% ± 2.7
+
+± is the 95% margin: a gap smaller than the two margins together may be chance.
+Avg turns 281.8; 5.2 s a game on one core; 651.7 s in all

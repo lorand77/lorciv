@@ -1,0 +1,10 @@
+1000 games, seats fixed, first seed 1, 8 jobs
+
+Wins by seat (seat 1 moves first)
+  Seat 1  Rome         281   28.1% ± 2.8
+  Seat 2  Greece       258   25.8% ± 2.7
+  Seat 3  The Huns     288   28.8% ± 2.8
+  Seat 4  Babylon      173   17.3% ± 2.3
+
+± is the 95% margin: a gap smaller than the two margins together may be chance.
+Avg turns 282.2; 5.2 s a game on one core; 656.6 s in all

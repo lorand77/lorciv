@@ -1,0 +1,25 @@
+1000 games, seats rotate (250 maps, each played 4 times), first seed 1, 8 jobs
+
+Wins by seat (seat 1 moves first)
+  Seat 1               246   24.6% ± 2.7
+  Seat 2               289   28.9% ± 2.8
+  Seat 3               233   23.3% ± 2.6
+  Seat 4               231   23.1% ± 2.6
+
+Wins by flavor
+  Rome         272   27.2% ± 2.8
+  Greece       225   22.5% ± 2.6
+  The Huns     308   30.8% ± 2.9
+  Babylon      194   19.4% ± 2.5
+
+Win % by flavor and seat
+             Seat 1        Seat 2        Seat 3        Seat 4       
+  Rome        28.4% ± 5.6   29.2% ± 5.6   25.6% ± 5.4   25.6% ± 5.4 
+  Greece      22.0% ± 5.1   26.8% ± 5.5   20.4% ± 5.0   20.8% ± 5.0 
+  The Huns    28.4% ± 5.6   34.4% ± 5.9   29.6% ± 5.7   30.8% ± 5.7 
+  Babylon     19.6% ± 4.9   25.2% ± 5.4   17.6% ± 4.7   15.2% ± 4.5 
+
+No winner by turn 2000: 1
+
+± is the 95% margin: a gap smaller than the two margins together may be chance.
+Avg turns 281.9; 5.3 s a game on one core; 667.4 s in all

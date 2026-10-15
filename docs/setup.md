@@ -415,14 +415,6 @@ sqlite3 data/lorciv.sqlite "VACUUM INTO '$HOME/backups/lorciv-backup-$(date +%F)
 
 and move the backup file somewhere safe (e.g. download to local machine, upload to cloud storage etc.)
 
-Restore, in the project dir:
-```
-rclone copy b2:lorciv-backups/lorciv-backup-DATE.sqlite ~/backups/   # only if it isn't in ~/backups
-pm2 stop lorciv
-cp ~/backups/lorciv-backup-DATE.sqlite data/lorciv.sqlite
-rm -f data/lorciv.sqlite-wal data/lorciv.sqlite-shm
-pm2 start lorciv
-```
 
 ### backup to B2
 
@@ -444,3 +436,14 @@ and create a cron job to run the backup script `scripts/backup.sh` daily: as
 It writes to `~/backups/`, the same folder as the manual backup above, and
 keeps 7 days there and 30 days in B2. The privacy policy says backups are kept
 for at most 90 days; this keeps well within that.
+
+#### restoring from B2
+
+Restore, in the project dir:
+```
+rclone copy b2:lorciv-backups/lorciv-backup-DATE.sqlite ~/backups/   # only if it isn't in ~/backups
+pm2 stop lorciv
+cp ~/backups/lorciv-backup-DATE.sqlite data/lorciv.sqlite
+rm -f data/lorciv.sqlite-wal data/lorciv.sqlite-shm
+pm2 start lorciv
+```

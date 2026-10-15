@@ -71,6 +71,7 @@ public/
                renderer.js (the canvas map) ui.js (the game page)
                replay-page.js (the replay page)
 tools/         simulate.js — N AI-only games over worker threads, by hand
+experiments/   <date>-<name>/ — one simulation experiment each: README.md, raw output
 test/          unit/, integration/, helpers/ (server.js, logs.js)
 docs/          CLAUDE.md design.md plan.md setup.md
 ```

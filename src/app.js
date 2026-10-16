@@ -19,6 +19,7 @@ const friendRoutes = require("./friends/routes");
 const settingsRoutes = require("./settings/routes");
 const achievementRoutes = require("./achievements/routes");
 const { attachSockets } = require("./game/socket");
+const { health } = require("./health");
 const rooms = require("./game/rooms");
 
 // At or over this, a request is logged as a warning.
@@ -114,6 +115,10 @@ function createServer() {
   // Nothing needs to know what the server runs on.
   app.disable("x-powered-by");
   app.use(securityHeaders);
+
+  // Ahead of the session and the request log: an uptime check every few
+  // minutes needs neither a session lookup nor a log line.
+  app.get("/health", health);
 
   // --- API: JSON body parsing, sessions, routers ---
   app.use(sessionMiddleware);

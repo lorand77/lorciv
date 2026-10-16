@@ -447,3 +447,14 @@ cp ~/backups/lorciv-backup-DATE.sqlite data/lorciv.sqlite
 rm -f data/lorciv.sqlite-wal data/lorciv.sqlite-shm
 pm2 start lorciv
 ```
+## monitoring (Better Stack)
+
+`/health` answers 200 when the app is up, the database reads and >10 % of the
+disk is free; otherwise 503, with the reason in `pm2 logs` (`health.failed`).
+
+- Better Stack monitor on `https://lorciv.lorand77.dev/health`, every 3 min.
+- Better Stack heartbeat, daily, 2 h grace, pinged by the backup cron job
+  (keep its URL out of the repo):
+  ```
+  0 3 * * * /home/lorciv/lorciv/scripts/backup.sh >> /home/lorciv/backups/backup.log 2>&1 && curl -fsS -m 10 --retry 3 -o /dev/null <heartbeat URL>
+  ```

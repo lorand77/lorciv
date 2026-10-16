@@ -53,6 +53,8 @@ under `src/game/` or `src/shared/`.
   page with the shell and on terms and privacy. A page script must not share a name with a file in
   `src/shared/`, which is served at `/js/` first. `public/assets/` holds the
   terrain and resource images.
+- `src/health.js` — `GET /health` for the uptime monitor (see "monitoring" in
+  `docs/setup.md`), mounted ahead of the session and the request log.
 - `src/db/retention.js` — the chat sweep, started by `server.js` only.
 - `scripts/backup.sh` — the nightly database backup to B2, run by cron on the
   server (see `docs/setup.md`).

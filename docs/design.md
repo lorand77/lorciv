@@ -250,8 +250,8 @@ Events:
   finishes: `method`, `route` (the matched pattern, e.g. `/api/me`, never the
   query string), `status`, `ms`, and `user`/`name` when signed in. `error`
   for 5xx, `warn` at 1 s or slower, `info` otherwise. 4xx stays `info`: a
-  signed-out page load gets a 401 from `/api/me` every time. Static files are
-  not logged. A request the client abandoned has `aborted=true`; one that
+  signed-out page load gets a 401 from `/api/me` every time. Static files and
+  `/health` are not logged. A request the client abandoned has `aborted=true`; one that
   never reached a route (unknown path, malformed JSON) has `route=unmatched`.
   Routers are mounted through `api()` in `src/app.js` so the route survives
   an error leaving its router. `http.unhandled` (`error`) is an exception no
@@ -298,6 +298,12 @@ Events:
   left for the next boot).
 - **Data:** `db.migrated` (`added=<table>.<column>`), `db.case_duplicates`
   (`warn`, `names`).
+- **Health** (`src/health.js`): `health.failed` (`error`), when `/health`
+  answers 503: `reason=disk_low` with `free_pct` (under 10 % free where the
+  database lives), or `reason=error` with `err`. The uptime check sees only
+  the status; this line says why. A healthy `/health` writes nothing: it sits
+  ahead of the session and the request log, so a check every few minutes
+  neither fills the log nor touches the session store.
 
 What is never logged, and where personal data may appear:
 

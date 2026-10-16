@@ -3,8 +3,9 @@
 Multiplayer Civ Lite: Node 24, Express 5, Socket.IO and better-sqlite3 on the
 server; vanilla JS in the browser. No bundler, no framework, no build step.
 The architecture and the reasons behind it, and what is decided but not built
-yet, are in `docs/design.md`; running and deploying is in `docs/setup.md`. Read `docs/design.md` before changing anything
-under `src/game/` or `src/shared/`.
+yet, are in `docs/design.md`; running and deploying is in `docs/setup.md`.
+Read `docs/design.md` before changing anything under `src/game/` or
+`src/shared/`.
 
 ## Commands
 
@@ -19,16 +20,31 @@ under `src/game/` or `src/shared/`.
 - `npm run dev` — http://localhost:3001 with `--watch`; loads `.env` if present.
   Every env-driven constant is declared in `src/config.js`.
 - `npm run db:reset` deletes the local database. Ask before running it.
+- `npm run user:password|user:deactivate|user:reactivate|user:delete -- <name>`
+  — the account CLIs in `src/db/` (see `docs/setup.md`); they change real
+  accounts and `user:delete` cannot be undone, so never run them unasked.
+  `npm start` is the production entry.
 
 ## Layout
 
 - `src/app.js` builds the app; `src/server.js` only listens. Tests boot
   `app.js` on a random port against a throwaway database, one per test file.
+- The full tree is under "Layout" in `docs/design.md`; what follows is what
+  you need to find your way.
 - `src/<area>/routes.js` — Express routers mounted at `/api/<area>` in `app.js`
-  (auth is mounted at `/api` itself; the leaderboard router is
-  `src/game/leaderboard.js`). `src/game/socket.js` owns every
-  Socket.IO event; `src/game/rooms.js` owns the live games: the engine
-  instance per game, its seats, and every write to the database.
+  (auth at `/api` itself, `src/game/routes.js` at `/api/games`; the leaderboard
+  router is `src/game/leaderboard.js`, at `/api/leaderboard`).
+  `src/game/socket.js` owns every Socket.IO event; `src/game/rooms.js` owns
+  the live games: the engine instance per game, its seats, and saving them
+  (the game, seat and action rows).
+- `src/auth/` — `routes.js` (register, login, logout, me), `session.js` (one
+  session for REST and the socket handshake), `origin.js` (the same-origin
+  check on `/api` and sockets), `middleware.js` (`requireAuth`), `throttle.js`
+  (login and register limits), `usernamePolicy.js`.
+- `src/db/` — `index.js` (open, schema, migrations), `schema.sql`,
+  `queries.js`, `retention.js` (the chat sweep, started by `server.js` only),
+  `reset.js`, and the account CLIs `setPassword.js`, `deactivate.js`,
+  `deleteUser.js`.
 - `src/shared/` — the game engine, loaded by browser and Node alike and served
   at `/js/`: `hex`, `state`, `mapgen`, `game`, `ai` (server and the replay
   page), `snapshot`, `settings`, `actions`, `replay`, and `achievements` (the
@@ -38,9 +54,13 @@ under `src/game/` or `src/shared/`.
   boot every one not yet awarded), `worker.js` replays it off the main thread
   through `analyze.js`, `routes.js` is `/api/achievements`.
 - `public/*.html` pages with their scripts in `public/js/`; `shell.js` builds
-  the top bar and rail, `authGuard.js` bounces signed-out visitors to login.
+  the top bar and rail, `authGuard.js` bounces signed-out visitors to login,
+  `net.js` wraps the Socket.IO client. `login.html`/`login.js` signs in or
+  registers (no shell, no guard); `index.html` redirects there.
+  `css/styles.css` styles every page but the game and the replay, which use
+  `css/game.css` and have no shell either.
   `game.html` is the game: `ui.js` (renders snapshots, sends actions, chat),
-  `renderer.js` (the canvas map), `game.css`. `lobby.html`/`lobby.js` is the
+  `renderer.js` (the canvas map). `lobby.html`/`lobby.js` is the
   lobby: tables, seats, your games, live games, presence. `replay.html`/
   `replay-page.js` rebuilds a game from its actions; `leaderboard.html`/
   `leaderboard.js` ranks players. `profile.html` is the profile: `profile.js`
@@ -49,12 +69,12 @@ under `src/game/` or `src/shared/`.
   `achievementToast.js` (styled by `css/toast.css`) shows new achievements on
   the game page and the lobby. `customize.html`/
   `customize.js` sets the colour scheme, which `theme.js` applies on every
-  page with the shell and on terms and privacy. A page script must not share a name with a file in
-  `src/shared/`, which is served at `/js/` first. `public/assets/` holds the
+  page with the shell and on `terms.html` and `privacy.html`. A page script
+  must not share a name with a file in `src/shared/`, which is served at `/js/`
+  first. `public/assets/` holds the
   terrain and resource images.
 - `src/health.js` — `GET /health` for the uptime monitor (see "monitoring" in
   `docs/setup.md`), mounted ahead of the session and the request log.
-- `src/db/retention.js` — the chat sweep, started by `server.js` only.
 - `scripts/backup.sh` — the nightly database backup to B2, run by cron on the
   server (see `docs/setup.md`).
 - `tools/simulate.js` — N AI-only games on every core, win rates by seat with
@@ -90,7 +110,8 @@ under `src/game/` or `src/shared/`.
   the database path is fixed when `src/db/index.js` loads.
 - The CSP (`src/app.js`) runs scripts only from files on this origin: no
   inline `<script>`, `onclick=` or `javascript:` URL in a page, and nothing
-  loaded from another host. A test scans `public/*.html` for them.
+  loaded from another host. `test/integration/headers.test.js` scans
+  `public/*.html` for the first three; the header itself enforces the last.
 - `src/shared/*.js` runs in two runtimes: keep the UMD tail at the bottom and
   use no Node-only or DOM-only APIs.
 - A change that makes the same actions on the same seed play out differently
@@ -102,7 +123,7 @@ under `src/game/` or `src/shared/`.
   will ever earn it.
 - Catalogues (difficulties, turn-time presets, action names) are allowlists in
   `src/shared/`. Add entries there, not in ad-hoc lists elsewhere.
-- Native modules need a rebuild after `npm install` because `ignore-scripts` is
+- Native modules need a rebuild after `npm ci` or `npm install` because `ignore-scripts` is
   on globally, and that rebuild must bypass the Socket wrapper (`\npm rebuild`),
   which otherwise silently produces no binary: see "run the app" in `docs/setup.md`.
 - In an interactive shell `npm` is aliased to `socket npm`; in a script or a

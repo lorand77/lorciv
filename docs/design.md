@@ -14,15 +14,16 @@ the database layer, the page shell) were copied from there and are now its own.
 
 ## Where things stand
 
-Milestones M0 to M4 are done and the site is live at
-`lorciv.lorand77.dev`: accounts and sessions work; the engine lives in
+The site is live at `lorciv.lorand77.dev`, backed up nightly to B2 and
+watched by an uptime check on `/health`. Accounts and sessions work; the engine lives in
 `src/shared/`; the server runs games in rooms, persisted after every action and
 rebuilt at boot; tables in the lobby seat up to four people with AI in the
 other seats; turn timers end an absent player's turn and hand the seat to the
-AI after too many misses; the game page plays through the server with chat and
-survives a reload and a server restart. Of the polish (M5), account deletion,
-the leaderboard, replays, profiles with friends, a Customize page with the
-colour scheme, and achievements exist. The sections below describe what exists.
+AI after too many misses; the game page plays through the server with chat,
+survives a reload and a server restart, and works on a phone. Account
+deletion, the leaderboard, replays (checked against the rules version a game
+was played under), profiles with friends, a Customize page with the colour
+scheme, and achievements exist. The sections below describe what exists.
 The last section lists what is still ahead.
 
 ## Tech stack
@@ -39,9 +40,9 @@ The last section lists what is still ahead.
 
 ```
 src/
-  app.js server.js config.js log.js
+  app.js server.js config.js log.js health.js (GET /health, the uptime check)
   auth/        routes (register, login, logout, me), session, middleware,
-               throttle, usernamePolicy
+               origin (the same-origin check), throttle, usernamePolicy
   db/          index.js (open, schema, migrations), schema.sql, queries.js,
                retention.js (the chat sweep), reset.js and the user CLI
                scripts (setPassword, deactivate, deleteUser)
@@ -60,7 +61,7 @@ src/
 public/
   index.html login.html lobby.html game.html replay.html leaderboard.html
   profile.html customize.html terms.html privacy.html
-  css/         styles.css (every page but the game), game.css (game and replay),
+  css/         styles.css (every page but the game and replay), game.css (those two),
                toast.css (achievement toasts, game and lobby)
   assets/      terrain and resource PNGs
   js/          login.js net.js authGuard.js shell.js theme.js lobby.js
@@ -71,6 +72,7 @@ public/
                renderer.js (the canvas map) ui.js (the game page)
                replay-page.js (the replay page)
 tools/         simulate.js — N AI-only games over worker threads, by hand
+scripts/       backup.sh — the nightly database backup to B2, run by cron
 experiments/   <date>-<name>/ — one simulation experiment each: README.md, raw output
 test/          unit/, integration/, helpers/ (server.js, logs.js)
 docs/          CLAUDE.md design.md setup.md
@@ -180,8 +182,8 @@ docs/          CLAUDE.md design.md setup.md
   at it and the games are the other players' record too. So it stays, renamed
   `deleted-<id>` (a name registration can never produce), without a password,
   and deactivated. What is only the person's is deleted in one transaction: the
-  chat they wrote, their friendships and friend requests, their display
-  settings and their sessions; tables they host are cancelled and seats they
+  chat they wrote, their friendships and friend requests, their achievements,
+  their display settings and their sessions; tables they host are cancelled and seats they
   hold at other tables released. A human seat in a live game refuses the
   deletion: deactivate first, let the clock hand the seat over, then delete (a
   game with no clock never will; its other players can leave it). The command
@@ -244,7 +246,7 @@ Events:
 - **Process** (`src/server.js`): `process.start` (version, node, url, db
   path), `process.stop` (signal; on SIGTERM/SIGINT the process exits at once,
   which is safe because everything that matters is already in SQLite),
-  `process.crash` (`error`, on `uncaughtException`/`unhandledRejection`; the
+  `process.crash` (`error`, `kind=uncaught_exception|unhandled_rejection`; the
   process then exits 1 and pm2 restarts it).
 - **HTTP:** `http.request` once per `/api` request when the response
   finishes: `method`, `route` (the matched pattern, e.g. `/api/me`, never the
@@ -259,7 +261,7 @@ Events:
   `{ error: "Server error." }`, never the stack.
 - **Auth** (the only lines with `ip`): `auth.register`, `auth.login`,
   `auth.login_failed`, `auth.throttled` (`warn`, with `kind=login|register`);
-  without `ip`: `auth.busy` (`warn`, the argon2 cap), `auth.origin_refused`
+  without `ip`: `auth.busy` (`warn`, `kind=login|register`, the argon2 cap), `auth.origin_refused`
   (`warn`, `via=http|socket`, `origin`, and for http `method` and `path`: a
   request from another host's page), `auth.logout`, and
   `auth.register_error`, `auth.login_error`, `auth.logout_error` (`error`,
@@ -276,15 +278,17 @@ Events:
   `game.start` (`game`, `host`, `seed`, `turn_time`, `seats`), `game.resume`
   (`game`, `seq`, `turn`, `status`: a room rebuilt from the database),
   `game.timeout` (`game`, `seat`, `user`, `missed`: a turn the server ended),
-  `game.takeover` (`game`, `seat`, `user`, `reason=timeout|leave`), `game.over`
-  (`game`, `winner`, `turn`, `seq`), `game.abort` (`game`, `reason=no_humans`),
-  `game.abandon_sweep` (`aborted`, `days`), `game.persist_failed` (`error`: the
-  write after an action failed and the room was rolled back),
-  `game.sweep_failed` (`error`), `game.resume_failed` (`error`, `game`, `err`:
+  `game.takeover` (`game`, `seat`, `user`, `reason=timeout|leave`, and `missed`
+  for a timeout, which then writes it instead of `game.timeout`), `game.over`
+  (`game`, `winner`, `turn`, `seq`), `game.abort` (`game`, `reason=no_humans`,
+  `turn`), `game.abandon_sweep` (`aborted`, `days`), `game.persist_failed`
+  (`error`, `game`, `seq`, `err`: the write after an action failed and the
+  room was rolled back), `game.sweep_failed` (`error`, `game` from the
+  deadline sweep or `task` from the abandon sweep, `err`), `game.resume_failed` (`error`, `game`, `err`:
   a game that could not be rebuilt at boot and was skipped), `game.join` (`game`, `seat` or
   `watcher=true`), and `game.action` once per accepted player action (`game`,
   `seq`, `turn`, `seat`, `type`: the kind of action, never its payload, which
-  `game_actions` holds). `game.action_refused` (`type`, `error`) at `debug`.
+  `game_actions` holds). `game.action_refused` (`game`, `seat`, `type`, `error`) at `debug`.
   The server's own actions have their own lines (`game.timeout`,
   `game.takeover`).
 - **Process, continued:** `process.resumed` (`games`: active games rebuilt at boot).
@@ -307,13 +311,19 @@ Events:
 
 What is never logged, and where personal data may appear:
 
-- **Users** appear as `user=<id> name=<username>`, always together: the name
-  for reading, the id because a deleted account's name can be registered again.
+- **Users** appear as `user=<id> name=<username>` on request, socket, auth
+  and achievement lines: the name for reading, the id because a deleted
+  account's name can be registered again. The game lines written by
+  `rooms.js` carry the id alone (`user` on `game.leave_seat`, `game.timeout`
+  and `game.takeover`; `host` on `game.table`, `game.start` and
+  `game.cancel`); only `game.join_seat` adds the name.
 - **IPs** appear only on the `auth.*` lines above, for dealing with password
   guessing and mass sign-ups. Never on requests, sockets or games.
 - **Never:** passwords or hashes, session ids, cookies, request bodies, query
-  strings, chat text. As a safety net the logger writes any field named
-  `password`, `hash`, `cookie`, `session` or `secret` as `[redacted]`.
+  strings, chat text. As a safety net the logger writes any field whose name
+  contains the word `password`, `hash`, `secret`, `token`, `session`, `sid`,
+  `cookie` or `authorization` as `[redacted]` (split on `_` and camelCase, so
+  `sessionID` and `authToken` count and `side` does not).
 
 ## Database
 
@@ -370,31 +380,36 @@ route instead: `src/friends/routes.js` sends `friends:changed` to the
 
 `login.html` (`login.js`) posts to register or login and goes to `lobby.html`
 on success. `index.html` redirects to login. `public/js/shell.js` builds the
-top bar and the left rail on every signed-in page except the game, and
+top bar and the left rail on every signed-in page except the game and the
+replay, and
 `authGuard.js` fills the user bar in it; shell loads first so the user bar it
 creates is the one authGuard finds. authGuard also defines `playerLink()`, a
 player's name as a link to their profile, which every list of players uses
 (leaderboard, lobby seats and presence, the profile's tabs). The rail is Play,
-My Profile with its three tabs as sub-items (Stats, My Games, Friends: plain
-links to `profile.html#<tab>`, so any tab is one click away), Customize and
-Leaderboard. On a phone the rail is one scrolling row with no room for
-nesting, so the sub-items hide and the profile page shows its own tab bar.
+My Profile with its four tabs as sub-items (Stats, My Games, Achievements,
+Friends: plain links to `profile.html#<tab>`, so any tab is one click away),
+Customize and Leaderboard. On a phone the rail is one scrolling row with no
+room for nesting, so the sub-items hide and the profile page shows its own tab
+bar; someone else's profile always shows it, since the rail's links go to your
+own tabs.
 
 The stylesheet is dark by default with a light scheme behind
 `<html data-scheme="light">`. `public/js/theme.js` sets it from
 `GET /api/settings` on every page with the shell and on the terms and
 privacy pages, and loads in `<head>` with a copy of the setting in
 localStorage so the page paints in the right scheme before the answer comes
-back; authGuard removes the copy on logout, so the next person at the browser
-gets the default. `customize.html` (`customize.js`; `/js/settings.js` is the
+back; authGuard removes the copy on logout, with the civ last picked in the
+lobby, so the next person at the browser gets the defaults. `customize.html` (`customize.js`; `/js/settings.js` is the
 engine's catalogue) offers dark or light and saves the choice at once. That is
 all of LorChess's Customize page that was copied: its board colours and
 uploaded images have no counterpart on a map of fixed terrain art. The game
 and replay pages keep their dark map colours (`game.css`) and do not load
 theme.js.
 
-`lobby.html` (`lobby.js`) is the lobby: open tables, a form for a new table,
-the user's games, live games to watch, who is online. `game.html` (`ui.js`,
+`lobby.html` (`lobby.js`), "Play" to players, is the lobby: games where it
+is your turn, open tables, a form for a new table, live games to watch, the
+user's games, who is online, and a switch for browser notifications when a
+turn begins. `game.html` (`ui.js`,
 `game.css`) is the game. Both are described under "The game on the server" and
 "Playing together". The game page has no shell: the map wants the whole
 viewport, so its sidebar carries the link back to the lobby and the user bar.
@@ -422,15 +437,14 @@ Authentication); sessions last 7 days
 `AUTH_WINDOW_MS` (15 min) and are written only on the `auth.*` log lines;
 what the logs hold and their 14-day lifetime (log rotation, `docs/setup.md`);
 nothing is visible when signed out; there is no analytics. The page also
-promises nightly backups to Backblaze B2 kept for at most 90 days, which M4
-sets up; check it again then. The contact address is `lorciv@lorand77.dev`.
-The page describes the game as it is; the backups it promises run nightly on
-the server (`scripts/backup.sh`, `docs/setup.md`).
+promises nightly backups to Backblaze B2 kept for at most 90 days:
+`scripts/backup.sh`, run by cron on the server (`docs/setup.md`), keeps 7
+days on the server and 30 in B2. The contact address is `lorciv@lorand77.dev`.
 
 ## The engine: `src/shared/`
 
 The engine is the JavaScript port of the single-player Civ Lite, about
-2,300 lines: hex math, the catalogues and entities, map generation, the rules
+2,300 lines when it was ported and about 2,600 now: hex math, the catalogues and entities, map generation, the rules
 and turn loop, and the AI. It was already separate from the canvas UI,
 runnable headless in Node, and deterministic from a seed. M1 moved it here
 and made the changes a server needs.
@@ -439,20 +453,23 @@ and made the changes a server needs.
 
 | file | holds | M1 change |
 |---|---|---|
-| `hex.js` | hex math (`hexNeighbors`, `hexDistance`, `hexesInRange`, `hexLine`, `axialRound`, `hexToPixel`, `pixelToHex`, `hexCorners`, `HEX_SIZE`) | split from the renderer |
+| `hex.js` | hex math (`hexNeighbors`, `hexDistance`, `hexesInRange`, `hexLine`, `axialRound`, `hexToPixel`, `pixelToHex`, `hexCorners`, `HEX_SIZE`, `HEX_DIRECTIONS`) | split from the renderer |
 | `state.js` | catalogues (units, techs, buildings, improvements, resources, terrain), `Unit`, `City`, `Civilization`, movement and line of sight | units and cities carry an `id` |
 | `mapgen.js` | seeded map generation and the PRNG | the PRNG exposes `getState`/`setState` |
-| `game.js` | `Game`: rules, combat, yields, production, tech, `endTurn`, score | ids, `setup`, five order methods, score history, AI state |
-| `ai.js` | `aiTakeTurn`, `runCpuTurns` | strategy memory moved onto the game |
+| `game.js` | `Game`: rules, combat, yields, production, tech, `endTurn`, score; `RULES_VERSION`; the civs (`PLAYER_NAMES`, `PLAYER_COLORS`, `PLAYER_BLURBS`) and `DIFFICULTY_DEFS` | ids, `setup`, five order methods, score history, AI state |
+| `ai.js` | `aiTakeTurn`, `runCpuTurns`; the civs' AI flavors (`LEADER_FLAVORS`) | strategy memory moved onto the game |
 | `snapshot.js` | `serializeGame`, `deserializeGame`, format version 2 | from the old save code, extended |
 | `settings.js` | the allowlists: difficulties, turn times, action names | new |
 | `actions.js` | `applyAction`, the one validator for player actions | new |
 | `replay.js` | `replayAll`: a game's states rebuilt from its seed and action rows; `rulesAllow`, `endsOn`: whether a replay is faithful | new (M5) |
 | `achievements.js` | the achievement catalogue: names, icons, groups, thresholds | new (M5) |
 
-The canvas renderer that used to share `hex.js` is `public/js/renderer.js`,
-moved as it was except that it loads its images from `/assets/`. The old
-`simulate.js` is `tools/simulate.js`. The old page (`index.html`, `style.css`,
+The canvas renderer that used to share `hex.js` is `public/js/renderer.js`.
+It moved as it was, except that it loads its images from `/assets/`; since
+then it centres the whole map, can centre on a hex (`centerOn`), and never
+lets the map be dragged out of sight. The old `simulate.js` grew into
+`tools/simulate.js`: AI-only games on worker threads, with the flavors fixed,
+rotated or mirrored across the seats (`flavorBySeat`, under "Engine API"). The old page (`index.html`, `style.css`,
 `ui.js`) was rewritten against the server in M2.
 
 ### One file, two runtimes
@@ -462,8 +479,9 @@ does, so `/js/game.js` is the engine and `/js/shell.js` falls through to
 `public/js/`. The engine files are classic scripts that refer to each other by
 bare names (`UNIT_DEFS`, `hexDistance`, `Game`), and they stay that way: a
 factory wrapper would have touched every cross-file reference in 2,300 lines
-for no runtime gain. Each file is strict and has a Node header and a Node
-tail, the convention LorChess's `lorfish.js` uses:
+for no runtime gain. Each file is strict and ends with a Node tail; a file
+that reads others as bare names also has a Node header, the convention
+LorChess's `lorfish.js` uses:
 
 ```js
 // Node: the files this one reads as bare names, hoisted onto globalThis.
@@ -678,15 +696,23 @@ nothing else keeps a list.
 
 `test/unit/engine.*.test.js`: every shared file loads in Node and keeps to
 the two-runtime rules; two games from one seed are identical, and a game
-resumed from a snapshot matches the original to the end; serialize after
-deserialize is the identity at several points of a game, and the snapshot
-carries ids, random state, score history, AI memory and `isCpu`; a batch of
+resumed from a snapshot matches the original to the end, and without
+`flavorBySeat` every civ plays its own flavor; serialize after deserialize is
+the identity at several points of a game, the snapshot carries ids, random
+state, score history, AI memory, `isCpu` and the rules version (or its
+absence), and an unknown version is refused; a batch of
 AI-only games finishes with unique ids and one score entry per round;
 `applyAction` refuses the wrong seat, a finished game, an unknown type, a
 unit that is not the seat's, an unreachable tile, an unknown item and a key
 that is not the catalogue's own, and applies each valid action; the AI stops
-when the last human civ falls; the settings agree with the engine's
-catalogues.
+when the last human civ falls; each rule under "Rules changed from the
+original" has a test of its own (`engine.rules`), as do the forge on hills and
+a start off grassland and plains; `rulesAllow`, `endsOn` and `replayAll`
+refuse other rules and a different end (`engine.replay`); the settings agree
+with the engine's catalogues, and every seat has a name, a colour and a line
+for the lobby.
+`test/unit/hex.test.js`: pixel to hex and back, clicks at edges and corners,
+rounding.
 `test/integration/static.shared.test.js`: `/js/game.js` is served and
 `/js/shell.js` still falls through. The engine tests take about 20 s, most of
 it AI play.
@@ -713,14 +739,18 @@ turn or seat.
   AI seats before the first human seat take their turn, and writes the seats
   and the first snapshot; the page then navigates to `game.html?id=<id>`.
   `GET /api/games` lists the games and tables the user holds a seat in,
-  newest activity first, with `mySeat` only while the user still plays it: a
+  newest activity first, with `mySeat` only while the user still plays it
+  (and `userSeat`, theirs whoever plays it now): a
   seat handed to the AI keeps its user, so the game stays listed, but as one
   to watch (and it shows among live games); `GET /api/games/:id` is readable by anyone signed
   in, because spectating is open.
 - **Joining.** `game:join {gameId}` answers with the full state
   (`rooms.viewFor`): the sequence number `seq`, status, winner, settings, the
-  seats with their players' names, the caller's own seat (`null` for a
-  spectator) and the snapshot. The socket joins the `game:<id>` room. The same
+  turn's `deadline`, the seats with their civs, players' names and missed
+  turns, the caller's own seat `mySeat` (`null` for a spectator),
+  `formerSeat` (the seat the AI took over from them, else `null`), the
+  snapshot, and the latest chat as `chat`; every `game:state` carries the same
+  but the chat. The socket joins the `game:<id>` room. The same
   event serves the first load, a reload and a reconnect; there is no separate
   catch-up.
 - **Acting.** `game:action {gameId, seq, type, ...}`. The server finds the
@@ -744,7 +774,7 @@ turn or seat.
   the ack carries the engine's message (a combat result, a founded city).
   Only the fields an action can carry are stored: `type`, `unitId`, `cityId`,
   `q`, `r`, `key`.
-- **Per-seat views.** `viewFor(room, seat)` is called once per socket on every
+- **Per-seat views.** `viewFor(room, userId)` is called once per socket on every
   broadcast and returns the snapshot without `rngState` and `aiState`
   (`clientSnapshot`): the engine is deterministic, so with them a player
   could run the AI ahead or know what a bankruptcy will take. The browser's
@@ -795,10 +825,14 @@ ack would be dropped and leave the page locked.
   turns, since nobody reads them. The tech tree opens by itself at the start of our turn when
   nothing is being researched, as the original did.
 - **Victory** shows the original overlay with the score graph from the
-  snapshot's `scoreHistory`, and a button back to the lobby.
+  snapshot's `scoreHistory`, titled for whoever looks: VICTORY! for the
+  winner, DEFEAT for every other seat (one the AI took over included, by
+  `formerSeat`), GAME OVER for a spectator or for someone whose abandoned civ
+  won under the AI. Its buttons are Watch the replay and Back to Play.
 - **Keys:** the original's shortcuts (Enter ends the turn, F founds, M/A/P
   start an improvement, K/H/U, S and T for the overlays, also the Stats and
-  Tech buttons, arrows pan), ignored
+  Tech buttons, arrows pan, Escape closes the overlays and drops the
+  selection), ignored
   while typing, with Ctrl, Cmd or Alt held, and for Enter on a focused button
   or link, which presses that instead; C centers the map. A held Enter ends
   one turn, not one per repeat, and End Turn is held for a second when a turn
@@ -855,13 +889,18 @@ or in the online list links to their profile.
 
 ### Tables
 
-Players see a table as a **room** ("New room", "Open rooms", "Create room");
-the code, the API and the log keep the name table, and "room" in this
-document still means a live game held in memory by `rooms.js`.
+Players see a table as a **room** ("New room", "Open rooms", "Create room",
+the "room" tag on its row, "Room" in My Games, and the API's error messages);
+the code and the log keep the name table (`cancelTable`, `listOpenTables`,
+`game.table`), and "room" in this document still means a live game held in
+memory by `rooms.js`.
 
 A game starts life as a **table**: a `games` row with status `lobby`, no
 snapshot and no room. The host's `POST /api/games` names the seats; the open
-ones wait for people. `GET /api/games/open` lists tables with an open seat.
+ones wait for people. `GET /api/games/open` lists tables with an open seat,
+newest first, and `GET /api/games/live` the games being played, latest
+activity first (fifty of each at most); the lobby leaves out of the second
+those the viewer still plays.
 `POST /api/games/:id/seats/:seat/join` takes a seat (one per person per game;
 a taken seat, an AI seat or a started game answer 409),
 `POST .../seats/:seat/leave` gives it back (the host cannot leave; the host
@@ -869,7 +908,7 @@ cancels the table with `DELETE /api/games/:id`). `POST /api/games/:id/start`,
 host only, turns the table into a game: open seats left become AI seats at the
 easiest level, the engine is built, the AI seats before the first human take
 their turn, the first snapshot and the first deadline are written, and the
-room exists from then on. The game page answers `not_started` for a table.
+room exists from then on. `game:join` answers `not_started` for a table.
 Tables and games nobody has touched for `ABANDON_DAYS` are aborted, at boot and
 once an hour (`game.abandon_sweep`).
 
@@ -934,20 +973,22 @@ A Players panel lists the seats with the civ, the player or "AI", a marker on
 the seat to move and the missed-turn count of an absent player; the status
 line carries the time left on the clock, red under thirty seconds; a Leave
 button hands the seat to the AI after a confirmation and then goes to the
-Play page, while the "← Play"
-link in the top bar (on the replay page too) only goes to the lobby, the
-seat kept and the clock running;
+Play page, while the "← Play" link at the top of the sidebar (under More on a
+phone; the replay page has it too) only goes to the lobby, the seat kept and
+the clock running;
 a Chat panel shows the
 history and sends; `turn:yours` while the tab is in the background changes
-the title and, if allowed, shows a notification. A seat the AI took over, an
-abandoned game and a table that has not started each have their own status
-line.
+the title and, if allowed, shows a notification. A seat the AI took over and
+an abandoned game each have their own status line; a table that has not
+started sends no state (`game:join` answers `not_started`) and the page says
+its room is on the Play page.
 
 ## Looking back: leaderboard and replays
 
 **Leaderboard.** `GET /api/leaderboard` (`src/game/leaderboard.js`,
 `queries.leaderboard`): every active account, with games played and games
-won over counted games, top 100 by wins, the sort and the cut in SQL. An
+won over counted games (the page adds the win rate, "—" without a game),
+top 100 by wins, the sort and the cut in SQL. An
 account with no counted game is listed at 0 / 0, below everyone who played.
 A finished game counts. So does an abandoned one (aborted after it started:
 no human left in it, or the abandon sweep) that two or more people played, as
@@ -1005,8 +1046,10 @@ step-by-step history a player could study against the people still playing
 it); `replay.html` (`replay-page.js`) rebuilds
 the states in the browser in slices, so a long game does not freeze the page,
 and shows them on the game's canvas with a slider, step buttons, play at three
-speeds and the arrow keys. It is linked from every finished or abandoned
-game in the lobby and from the victory screen. The replay page loads `ai.js`;
+speeds and the keyboard (the arrows step, Space plays, Home and End jump to
+the ends). It is linked from every finished or abandoned game in the lobby
+and on the profile's Games tab, from the victory screen, and from each earned
+achievement. The replay page loads `ai.js`;
 the game page does not.
 
 ## Profiles and friends
@@ -1044,7 +1087,7 @@ unknown one.
   Play or Watch). Each row: last activity, the civ, every seat as a chip
   (people link to their profiles; seats carry `userId` for this), the turn, the
   result from the owner's side (Won, Lost, Left when the AI has the seat,
-  Abandoned, In progress or Your turn, Room) and Play, Watch, Replay or a link
+  Abandoned, In progress or Your turn (Their turn on someone else's), Room) and Play, Watch, Replay or a link
   to the lobby. The lobby keeps its own "My games" list; this one is the full
   record on the profile.
 - **Achievements** (`achievementsPage.js`, `GET /api/achievements` and
@@ -1076,8 +1119,9 @@ Badges for things done in games, on the model of LorChess's, built for this
 game. The catalogue is `src/shared/achievements.js` (name, icon, group,
 description, and the threshold the server checks, so the text and the rule
 cannot drift apart), served at `/js/achievements.js` for the profile and
-required by the server. Four groups: **Victory** (First Blood; a win alone
-against the AI with every AI at Prince, King or Emperor or harder; World
+required by the server. Five groups: **Victory** (First Blood; Princely, Royal and Imperial Victory,
+a win alone against the AI, with every AI at King or harder for Royal and at
+Emperor for Imperial; World
 Conqueror, a win with three other people at the table; Blitz, a win by turn
 150; Flawless, never losing a city; Comeback, a win after losing one's
 capital; Four Banners, a win as every civ; Hat Trick, three wins in a row),
@@ -1095,8 +1139,8 @@ walled city with a Horseman; Brute Force: the Huns, of all people, are the
 first to know every tech; An Eye for an Eye: Babylon takes a city from the
 civ that just took one of its own, on its very next turn, which is the same
 round when it plays after that civ and the next when before), and
-**Milestones**, tiered Bronze, Silver and Gold (games played 10/50/100, wins
-5/25/100, cities captured 10/50/200). The
+**Milestones**, tiered Bronze, Silver and Gold (Veteran, games played 10/50/100;
+Victorious, wins 5/25/100; Conqueror, cities captured 10/50/200). The
 numbers come from AI-only games (`tools/simulate.js`): they are won between
 turns 170 and 320, their biggest cities reach 7 to 24, and no AI civ ever
 stands every building.
@@ -1149,15 +1193,16 @@ stands every building.
   days played) are left for later.
 
 `test/unit/achievements.test.js` checks the catalogue, the observer on a real
-AI game (and that watching changes nothing), the tracker on hand-built states
-and `analyzeGame` on a short record and a broken one;
+AI game (and that watching changes nothing), the tracker, the civilizations'
+own included, on hand-built states and `analyzeGame` on a short record and a broken one;
 `test/integration/achievements.test.js` plays games through the server and
 checks the awards, the toast, the API, the record ones, the games that do not
-count, a game that does not replay, and the backfill at boot.
+count, a game that does not replay, the backfill at boot, and a game
+awarded again after `AWARDS_VERSION` is bumped.
 
 ## Decided, not yet built
 
-Left of the M5 polish: a finished-game summary page (the victory screen on
+Left of the polish: a finished-game summary page (the victory screen on
 the game page serves today) and broadcasting after each AI civ if the round
 jump feels wrong. From the profile work: inviting a friend into a
 seat of a table you host. From the achievements: social ones (finishing games
@@ -1165,4 +1210,4 @@ with people without leaving, the fastest and slowest clocks, a table of
 friends, days played). Ideas kept for later: fog of war (the per-seat
 view function is the hook), simultaneous turns, maps sized to the number of
 players, more civs, ratings across multi-player results, email or push
-notifications for "your turn", replays with scrubbing, a hall of fame.
+notifications for "your turn", a hall of fame.

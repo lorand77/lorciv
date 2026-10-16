@@ -2,8 +2,8 @@
 
 What the code does and, more importantly, why. This describes the **current
 state**, not a plan: when a decision changes, change it here in the same
-commit. What is not built yet, and the order it comes in, is `docs/plan.md`;
-how to run and deploy is `docs/setup.md`; conventions for working in the repo
+commit. What is decided but not built yet is at the end, under "Decided, not
+yet built"; how to run and deploy is `docs/setup.md`; conventions for working in the repo
 are in `docs/CLAUDE.md`.
 
 LorCiv is a multiplayer web version of Civ Lite, a small turn-based 4X game
@@ -14,7 +14,7 @@ the database layer, the page shell) were copied from there and are now its own.
 
 ## Where things stand
 
-Milestones M0 to M4 of the plan are done and the site is live at
+Milestones M0 to M4 are done and the site is live at
 `lorciv.lorand77.dev`: accounts and sessions work; the engine lives in
 `src/shared/`; the server runs games in rooms, persisted after every action and
 rebuilt at boot; tables in the lobby seat up to four people with AI in the
@@ -73,7 +73,7 @@ public/
 tools/         simulate.js — N AI-only games over worker threads, by hand
 experiments/   <date>-<name>/ — one simulation experiment each: README.md, raw output
 test/          unit/, integration/, helpers/ (server.js, logs.js)
-docs/          CLAUDE.md design.md plan.md setup.md
+docs/          CLAUDE.md design.md setup.md
 ```
 
 ## Authentication
@@ -429,7 +429,7 @@ the server (`scripts/backup.sh`, `docs/setup.md`).
 
 ## The engine: `src/shared/`
 
-The engine is the JavaScript port of Civ Lite from `civ_lite-old/`, about
+The engine is the JavaScript port of the single-player Civ Lite, about
 2,300 lines: hex math, the catalogues and entities, map generation, the rules
 and turn loop, and the AI. It was already separate from the canvas UI,
 runnable headless in Node, and deterministic from a seed. M1 moved it here
@@ -453,7 +453,7 @@ and made the changes a server needs.
 The canvas renderer that used to share `hex.js` is `public/js/renderer.js`,
 moved as it was except that it loads its images from `/assets/`. The old
 `simulate.js` is `tools/simulate.js`. The old page (`index.html`, `style.css`,
-`ui.js`) stays in `civ_lite-old/` until M2 rewrites it against the server.
+`ui.js`) was rewritten against the server in M2.
 
 ### One file, two runtimes
 
@@ -638,7 +638,7 @@ engine's own wording where it has one.
 | `setResearch` | key | `setResearch` |
 | `endTurn` | — | `endTurn` only; running the AI seats that follow is the server's job (`rooms.js`, M2) |
 
-Handing a seat to the AI (`leave` in the plan) is not an engine action: it is
+Handing a seat to the AI (`leave`) is not an engine action: it is
 `civ.isCpu = true`, done by `rooms.js`.
 
 ### `snapshot.js`
@@ -1157,13 +1157,12 @@ count, a game that does not replay, and the backfill at boot.
 
 ## Decided, not yet built
 
-Left of the plan's polish (M5, `docs/plan.md`): a finished-game summary page
-(the victory screen on the game page serves today), broadcasting after each AI
-civ if the round jump feels wrong, and deleting
-`civ_lite-old/` and the `lorchess/` reference copy once the game page has been
-checked against the original. From the profile work: inviting a friend into a
+Left of the M5 polish: a finished-game summary page (the victory screen on
+the game page serves today) and broadcasting after each AI civ if the round
+jump feels wrong. From the profile work: inviting a friend into a
 seat of a table you host. From the achievements: social ones (finishing games
 with people without leaving, the fastest and slowest clocks, a table of
 friends, days played). Ideas kept for later: fog of war (the per-seat
 view function is the hook), simultaneous turns, maps sized to the number of
-players, more civs.
+players, more civs, ratings across multi-player results, email or push
+notifications for "your turn", replays with scrubbing, a hall of fame.

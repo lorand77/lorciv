@@ -39,7 +39,6 @@ wrapper used in development; see `docs/setup.md`.
 ## Docs
 
 - [docs/design.md](docs/design.md): architecture and the reasons behind it
-- [docs/plan.md](docs/plan.md): the milestones, done and ahead
 - [docs/setup.md](docs/setup.md): running and deploying
 - [docs/CLAUDE.md](docs/CLAUDE.md): conventions for working in the repo
 

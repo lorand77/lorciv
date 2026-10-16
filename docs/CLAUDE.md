@@ -2,9 +2,8 @@
 
 Multiplayer Civ Lite: Node 24, Express 5, Socket.IO and better-sqlite3 on the
 server; vanilla JS in the browser. No bundler, no framework, no build step.
-The architecture and the reasons behind it are in `docs/design.md`; what is
-not built yet, and in which order it will be, is `docs/plan.md`; running and
-deploying is in `docs/setup.md`. Read `docs/design.md` before changing anything
+The architecture and the reasons behind it, and what is decided but not built
+yet, are in `docs/design.md`; running and deploying is in `docs/setup.md`. Read `docs/design.md` before changing anything
 under `src/game/` or `src/shared/`.
 
 ## Commands
@@ -66,11 +65,6 @@ under `src/game/` or `src/shared/`.
   raw output it rests on. Never loaded by the app.
 - `test/unit`, `test/integration` — `node --test`. `test/helpers/server.js`
   boots the server; `test/helpers/logs.js` captures log lines for assertions.
-- `civ_lite-old/` — the single-player original. Everything in it is ported;
-  it is kept only until the game page has been checked against it in a
-  browser, then deleted.
-- `lorchess/` — gitignored reference copy of the sister project the scaffolding
-  was copied from. Never required at runtime; delete it when no longer needed.
 
 ## Conventions
 
@@ -82,7 +76,6 @@ under `src/game/` or `src/shared/`.
   decided or re-checked on the server; the browser's engine is for previews.
 - Commit subjects are short and imperative; a `feat:`/`fix:` prefix is optional.
 - When a design decision changes, update `docs/design.md` in the same commit.
-  When a milestone lands, move its detail from `docs/plan.md` to `docs/design.md`.
 - Server code logs through `src/log.js` with a fixed event name and fields
   (`log.info("game.over", { game, winner })`), never `console.*`. The events,
   and what must never be logged, are under "Logging" in `docs/design.md`.

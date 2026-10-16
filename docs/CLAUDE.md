@@ -56,8 +56,12 @@ under `src/game/` or `src/shared/`.
 - `src/db/retention.js` — the chat sweep, started by `server.js` only.
 - `scripts/backup.sh` — the nightly database backup to B2, run by cron on the
   server (see `docs/setup.md`).
-- `tools/simulate.js` — N AI-only games with win counts; run by hand, never
-  loaded by the app.
+- `tools/simulate.js` — N AI-only games on every core, win rates by seat with
+  the AI flavors fixed, rotated or mirrored (`--seats`) and by flavor; run by
+  hand, never loaded by the app.
+- `experiments/<date>-<name>/` — one folder per simulation experiment: a
+  `README.md` (question, design, exact commands, results, discussion) and the
+  raw output it rests on. Never loaded by the app.
 - `test/unit`, `test/integration` — `node --test`. `test/helpers/server.js`
   boots the server; `test/helpers/logs.js` captures log lines for assertions.
 - `civ_lite-old/` — the single-player original. Everything in it is ported;
